@@ -22,7 +22,7 @@ namespace MapChooser;
 public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
 {
     public override string ModuleName => "GG1_MapChooser";
-    public override string ModuleVersion => "v1.0.1";
+    public override string ModuleVersion => "v1.0.2";
     public readonly IStringLocalizer<MapChooser> _localizer;
     public MapChooser (IStringLocalizer<MapChooser> localizer)
     {
@@ -967,6 +967,17 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         }
         voteTimer??= AddTimer(1.0f, EndOfVotes, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE);
         DoAutoMapVote(null!, timeToVote, SSMC_ChangeMapTime.ChangeMapTime_MapEnd);
+    }
+    [ConsoleCommand("ggmc_auto_mapchange", "Automatically change the map to a random map.")]
+    [CommandHelper(whoCanExecute: CommandUsage.SERVER_ONLY)]
+    public void AutoMapChangeCommand(CCSPlayerController? caller, CommandInfo command)
+    {
+        if (IsVoteInProgress)
+        {
+            Logger.LogInformation("MapVoteCommand: Another vote active when ggmc_auto_mapchange. Skip change");
+            return;
+        }
+        GGMCDoAutoMapChange();
     }
 
     [ConsoleCommand("ggmc_nortv", "Turn off rtv")]

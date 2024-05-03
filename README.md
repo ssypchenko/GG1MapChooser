@@ -5,7 +5,7 @@ The **GG1MapChooser** plugin enhances map selection and management for CS2 game 
 ## **Features**
 
 Random Map Selection: Automatically selects the next map with configurable weights.
-Map Voting System: Players can vote on which maps to play next.
+Map Voting System: Players can vote on which maps to play next. If no one votes, the plugin chooses a random map from the list to vote.
 Map Nominations: Players can nominate maps for voting.
 Player Count Thresholds: Specify minimum and maximum player counts for maps to be included in the vote.
 Command Controls: Includes commands like rtv (rock the vote) and nominate for direct player interaction.
@@ -42,6 +42,7 @@ _Quick Map Selection:_ ggmap <partofmapname> helps find and switch to a map quic
 
 _External Controls:_
 ggmc_mapvote_start [time]: Trigger a map vote externally with an optional time parameter.
+ggmc_auto_mapchange: Automatically change a map to random map.
 ggmc_nortv: Disable the rtv command temporarily to maintain game continuity.
 
 ## **Disclaimer**
