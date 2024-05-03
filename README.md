@@ -45,3 +45,8 @@ ggmc_nortv: Disable the rtv command temporarily to maintain game continuity.
 ## **Disclaimer**
 
 The plugin is provided "as-is" and fulfills the specific requirements it was designed for. While I am not planning further major updates, I welcome suggestions that might benefit a broader user base, which could lead to additional features.
+
+## **Credits** 
+
+Thank you for UMC Mapchooser for the main ideas
+https://forums.alliedmods.net/showthread.php?t=134190
