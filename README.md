@@ -31,11 +31,13 @@ _LastDisconnectedChangeMap:_ Switch to a random map after the last player discon
 ## **Usage**
 
 _Voting:_ Players can initiate a map vote using !rtv or rtv in chat. The required percentage of votes to start a vote is controlled by the VotesToWin setting.
+
 _Nominating:_ Players can nominate a map by typing !nominate <mapname> or simply nominate to bring up a list of eligible maps based on current server conditions.
 
 **Admin Commands**
 
 _Map Change:_ Use css_maps (or !maps) to change the map manually or start a vote with standard or custom selections.
+
 _Quick Map Selection:_ ggmap <partofmapname> helps find and switch to a map quickly by using a partial name match.
 
 _External Controls:_
