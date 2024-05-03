@@ -22,7 +22,7 @@ namespace MapChooser;
 public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
 {
     public override string ModuleName => "GG1_MapChooser";
-    public override string ModuleVersion => "v1.0.0";
+    public override string ModuleVersion => "v1.0.1";
     public readonly IStringLocalizer<MapChooser> _localizer;
     public MapChooser (IStringLocalizer<MapChooser> localizer)
     {
