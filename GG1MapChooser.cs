@@ -795,7 +795,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     public HookResult OnChat(EventPlayerChat @event, GameEventInfo info)
     {
         var player = Utilities.GetPlayerFromUserid(@event.Userid);
-        if (!IsValidPlayer(player) || !canVote)
+        if (player == null || !IsValidPlayer(player) || !canVote)
             return HookResult.Continue;
 
         if (@event.Text.Trim() == "rtv" || @event.Text.Trim() == "RTV")
