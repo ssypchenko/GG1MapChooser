@@ -1,8 +1,8 @@
-###**GG1MapChooser**
+### **GG1MapChooser**
 
 The **GG1MapChooser** plugin enhances map selection and management for CS2 game servers. It introduces robust controls over map voting, nominations, and automatic map rotation based on player counts and preferences.
 
-**Features**
+## **Features**
 
 Random Map Selection: Automatically selects the next map with configurable weights.
 Map Voting System: Players can vote on which maps to play next.
@@ -11,7 +11,7 @@ Player Count Thresholds: Specify minimum and maximum player counts for maps to b
 Command Controls: Includes commands like rtv (rock the vote) and nominate for direct player interaction.
 Admin commands: Include commands for admins to start voting or change the map.
 
-**Configuration Files**
+## **Configuration Files**
 
 Map Configuration: Define map settings in csgo/cfg/GGMCmaps.json:
 Minimum and maximum player counts for map eligibility.
@@ -28,7 +28,7 @@ _VotesToWin:_ Percentage of votes needed to win the vote.
 _RandomMapOnStart:_ Enable changing to a random map on server restart.
 _LastDisconnectedChangeMap:_ Switch to a random map after the last player disconnects.
 
-**Usage**
+## **Usage**
 
 _Voting:_ Players can initiate a map vote using !rtv or rtv in chat. The required percentage of votes to start a vote is controlled by the VotesToWin setting.
 _Nominating:_ Players can nominate a map by typing !nominate <mapname> or simply nominate to bring up a list of eligible maps based on current server conditions.
@@ -42,6 +42,6 @@ _External Controls:_
 ggmc_mapvote_start [time]: Trigger a map vote externally with an optional time parameter.
 ggmc_nortv: Disable the rtv command temporarily to maintain game continuity.
 
-**Disclaimer**
+## **Disclaimer**
 
 The plugin is provided "as-is" and fulfills the specific requirements it was designed for. While I am not planning further major updates, I welcome suggestions that might benefit a broader user base, which could lead to additional features.
