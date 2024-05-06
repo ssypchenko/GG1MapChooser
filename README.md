@@ -45,6 +45,10 @@ ggmc_mapvote_start [time]: Trigger a map vote externally with an optional time p
 ggmc_auto_mapchange: Automatically change a map to random map.
 ggmc_nortv: Disable the rtv command temporarily to maintain game continuity.
 
+## **Translation**
+
+Available in English and Russian. You can add your own translations by sending me "lang".json file
+
 ## **Disclaimer**
 
 The plugin is provided "as-is" and fulfills the specific requirements it was designed for. While I am not planning further major updates, I welcome suggestions that might benefit a broader user base, which could lead to additional features.
