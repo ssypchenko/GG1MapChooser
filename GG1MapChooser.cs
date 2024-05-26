@@ -9,6 +9,7 @@ using CounterStrikeSharp.API.Core.Attributes.Registration;
 using CounterStrikeSharp.API.Core.Translations;
 using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Commands;
+using CounterStrikeSharp.API.Modules.Cvars;
 using CounterStrikeSharp.API.Modules.Entities;
 using CounterStrikeSharp.API.Modules.Entities.Constants;
 using CounterStrikeSharp.API.Modules.Menu;
@@ -22,11 +23,14 @@ namespace MapChooser;
 public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
 {
     public override string ModuleName => "GG1_MapChooser";
-    public override string ModuleVersion => "v1.0.2";
+    public override string ModuleVersion => "v1.0.3";
     public readonly IStringLocalizer<MapChooser> _localizer;
+    public MaxRoundsManager roundsManager;
+
     public MapChooser (IStringLocalizer<MapChooser> localizer)
     {
         _localizer = localizer;
+        roundsManager = new(this);
     }
     public MCConfig Config { get; set; } = new();
     public void OnConfigParsed (MCConfig config)
@@ -63,6 +67,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     private List<string> _playedMaps = new List<string>();
     public string MapToChange = ""; 
     public bool MapIsChanging = false;
+    public CCSGameRules GameRules = null!;
     public override void Load(bool hotReload)
     {
         mapsFilePath = Server.GameDirectory + "/csgo/cfg/GGMCmaps.json";
@@ -82,14 +87,16 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         }
         RegisterEventHandler<EventRoundStart>(EventRoundStartHandler);
         RegisterEventHandler<EventRoundEnd>(EventRoundEndHandler);
+        RegisterEventHandler<EventRoundAnnounceLastRoundHalf>(EventRoundAnnounceLastRoundHalfHandler);
+        RegisterEventHandler<EventRoundAnnounceMatchStart>(EventRoundAnnounceMatchStartHandler);
         RegisterListener<Listeners.OnMapStart>(name =>
         {
             Logger.LogInformation(name + " loaded");
             ResetData();
             canVote = ReloadMapcycle();
-            if (MapToChange != "" && MapToChange != name) // case when the server loaded the map different from requested in case the collection is broken, so we need to restart the server to fix the collection
+            if (Config.WorkshopMapProblemCheck && MapToChange != "" && MapToChange != name) // case when the server loaded the map different from requested in case the collection is broken, so we need to restart the server to fix the collection
             {
-                if (++RestartProblems < 6 && canVote)
+                if (++RestartProblems < 4 && canVote)
                 {
                     Logger.LogError($"The problem with changed map. Instead of {MapToChange} loaded {name}. Try to change again");
                     GGMCDoAutoMapChange();
@@ -97,7 +104,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                 }
                 else
                 {
-                    Logger.LogError($"The problem with changed map more then 5 times. Instead of {MapToChange} loaded {name}. Restart server");
+                    Logger.LogError($"The problem with changed map more then 3 times. Instead of {MapToChange} loaded {name}. Restart server");
                     Server.ExecuteCommand("sv_cheats 1; restart");
                     return;
                 }
@@ -136,6 +143,10 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                     Logger.LogError("Could not create timer for map change on server start");
                 }
             }
+            AddTimer(3.0f, () => {
+                GameRules = null!;
+                GameRules = GetGameRules();
+            });
         });
         RegisterListener<Listeners.OnMapEnd>(() => 
         {
@@ -195,6 +206,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                 }
             }
         });
+        
         if (hotReload)
         {
             mapChangedOnStart = true;
@@ -209,20 +221,61 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                 }
             }
         }
+        AddTimer(2.0f, () => {
+            GameRules = GetGameRules();
+        });
     }
     public override void Unload(bool hotReload)
     {
         DeregisterEventHandler<EventRoundStart>(EventRoundStartHandler);
         DeregisterEventHandler<EventRoundEnd>(EventRoundEndHandler);
+        DeregisterEventHandler<EventRoundAnnounceLastRoundHalf>(EventRoundAnnounceLastRoundHalfHandler);
+        DeregisterEventHandler<EventRoundAnnounceMatchStart>(EventRoundAnnounceMatchStartHandler);
+    }
+    public HookResult EventRoundAnnounceLastRoundHalfHandler(EventRoundAnnounceLastRoundHalf @event, GameEventInfo info)
+    {
+        if (@event is null)
+            return HookResult.Continue;
+
+        roundsManager.LastBeforeHalf = true;
+        return HookResult.Continue;
+    } 
+    public HookResult EventRoundAnnounceMatchStartHandler(EventRoundAnnounceMatchStart @event, GameEventInfo info)
+    {
+        if (@event is null)
+            return HookResult.Continue;
+
+        roundsManager.ClearRounds();
+        return HookResult.Continue;
     }
     public HookResult EventRoundStartHandler(EventRoundStart @event, GameEventInfo info)
     {
         Restart = false;
+        if (canVote && !roundsManager.WarmupRunning && roundsManager.CheckMaxRounds())
+        {
+            Logger.LogInformation("Time to vote because of CheckMaxRounds");
+            roundsManager.MaxRoundsVoted = true;
+            StartVote();
+        }
+        else
+        {
+            Logger.LogInformation($"Round start, canVote {(canVote ? "True" : "False")}, Warmup {(roundsManager.WarmupRunning ? "True" : "False")}, CheckMaxRounds {(roundsManager.CheckMaxRounds() ? "True" : "False")} ");
+        }
         return HookResult.Continue;
     }
     public HookResult EventRoundEndHandler(EventRoundEnd @event, GameEventInfo info)
     {
         Restart = true;
+        if (@event is null)
+            return HookResult.Continue;
+        CsTeam? winner = Enum.IsDefined(typeof(CsTeam), (byte)@event.Winner) ? (CsTeam)@event.Winner : null;
+        if (winner is not null)
+            roundsManager.RoundWin(winner.Value);
+
+        if (roundsManager.LastBeforeHalf)
+            roundsManager.SwapScores();
+
+        roundsManager.LastBeforeHalf = false;
         return HookResult.Continue;
     }
     private void Timer_ChangeMapOnEmpty()
@@ -282,7 +335,21 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         }
         return false;
     }
-
+    //Start vote at the beginning of the round according to rules of Round Manager
+    private void StartVote()
+    {
+        Logger.LogInformation("Vote started according to Round Manager Rules");
+        if (IsVoteInProgress)
+        {
+            Logger.LogInformation("MapVoteCommand: Another vote active when mapvote start. Skip votes");
+            return;
+        }
+        IsVoteInProgress = true;
+        timeToVote = Config.VotingTime;
+        VotesCounter = 0;
+        voteTimer??= AddTimer(1.0f, EndOfVotes, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE);
+        DoAutoMapVote(null!, timeToVote, SSMC_ChangeMapTime.ChangeMapTime_MapEnd);
+    }
 // Автоматическая смена карты на рандомную подходящую
     private void GGMCDoAutoMapChange(SSMC_ChangeMapTime changeTime = SSMC_ChangeMapTime.ChangeMapTime_Now)
     {
@@ -1232,6 +1299,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             rtvTimer.Kill();
             rtvTimer = null;
         }
+        roundsManager.InitialiseMap();
     }
     private static bool IsValidPlayer (CCSPlayerController? p)
     {
@@ -1401,6 +1469,10 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             }
         }
     }
+    private static CCSGameRules GetGameRules()
+    {
+        return CounterStrikeSharp.API.Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").First().GameRules!;
+    }
     public enum Nominations
     {
         Nominated = 0,
@@ -1410,7 +1482,6 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         Error
     };
 }
-
 public class MCConfig : BasePluginConfig 
 {
     [JsonPropertyName("RememberPlayedMaps")]
@@ -1447,6 +1518,18 @@ public class MCConfig : BasePluginConfig
     /* Sound when vote start */
     [JsonPropertyName("VoteStartSound")]
     public string VoteStartSound { get; set; } = "sounds/vo/announcer/cs2_classic/felix_broken_fang_pick_1_map_tk01.wav";
+
+    /* Check if problems with Workshop map (if it doesn't exists, server default map will be loaded, so plugin change to a random map) */
+    [JsonPropertyName("WorkshopMapProblemCheck")]
+    public bool WorkshopMapProblemCheck { get; set; } = true;
+
+    /* Set True if Vote start depends on number of Round Wins by CT or T  */
+    [JsonPropertyName("VoteDependsOnRoundWins")]
+    public bool VoteDependsOnRoundsWinned { get; set; } = false;
+    
+    /* Number of maps in votre for players 1-7 */
+    [JsonPropertyName("TriggerRoundsBeforEnd")]
+    public int TriggerRoundsBeforEnd { get; set; } = 0;
 }
 public enum SSMC_ChangeMapTime
 {
@@ -1480,5 +1563,104 @@ public class Player
     public bool HasProposedMaps()
     {
         return !string.IsNullOrEmpty(ProposedMaps);
+    }
+}
+public class MaxRoundsManager
+{
+    public MaxRoundsManager (MapChooser plugin)
+    {
+        Plugin = plugin;
+        CvarMaxRounds = ConVar.Find("mp_maxrounds");
+        CvarCanClinch = ConVar.Find("mp_match_can_clinch");
+        MaxRoundsValue = CvarMaxRounds?.GetPrimitiveValue<int>() ?? 0;
+        CanClinch = CvarCanClinch?.GetPrimitiveValue<bool>() ?? true;
+    }
+    MapChooser Plugin;
+    private int CTWins = 0;
+    private int TWins = 0;
+    public ConVar? CvarMaxRounds;
+    public ConVar? CvarCanClinch;
+    public bool MaxRoundsVoted = false;
+    public int MaxRoundsValue;
+    public bool CanClinch;
+    public bool UnlimitedRounds => MaxRoundsValue <= 0;
+    public bool LastBeforeHalf = false;
+    public bool WarmupRunning => Plugin.GameRules?.WarmupPeriod ?? false;
+    public void InitialiseMap()
+    {
+        MaxRoundsValue = CvarMaxRounds?.GetPrimitiveValue<int>() ?? 0;
+        CanClinch = CvarCanClinch?.GetPrimitiveValue<bool>() ?? true;
+        ClearRounds();
+        MaxRoundsVoted = false;
+        Plugin.Logger.LogInformation($"On Initialise Map set: MaxRoundsValue {MaxRoundsValue}, CanClinch {(CanClinch ? "true" : "false")}");
+    }
+    public int RemainingRounds
+    {
+        get
+        {
+            var played = MaxRoundsValue - Plugin.GameRules.TotalRoundsPlayed;
+            if (played < 0)
+                return 0;
+            return played;
+        }
+    }
+    public int RemainingWins
+    {
+        get
+        {
+            return MaxWins - CurrentHighestWins;
+        }
+    }
+    public int MaxWins
+    {
+        get
+        {
+            if (MaxRoundsValue <= 0)
+                return 0;
+
+            if (!CanClinch)
+                return MaxRoundsValue;
+
+            return ((int)Math.Floor(MaxRoundsValue / 2M)) + 1;
+        }
+    }
+    public int CurrentHighestWins => CTWins > TWins ? CTWins : TWins;
+    public void ClearRounds()
+    {
+        CTWins = 0;
+        TWins = 0;
+        LastBeforeHalf = false;
+    }
+    public void SwapScores()
+    {
+        var oldCtWins = CTWins;
+        CTWins = TWins;
+        TWins = oldCtWins;
+    }
+    public void RoundWin(CsTeam team)
+    {
+        if (team == CsTeam.CounterTerrorist)
+        {
+            CTWins++;
+
+        }
+        else if (team == CsTeam.Terrorist)
+        {
+            TWins++;
+        }
+        Plugin.Logger.LogInformation($"T Wins {TWins}, CTWins {CTWins}");
+    }
+    public bool CheckMaxRounds()
+    {
+        Plugin.Logger.LogInformation($"UnlimitedRounds {(UnlimitedRounds ? "true" : "false")}, RemainingRounds {RemainingRounds}, RemainingWins {RemainingWins}");
+        if (!Plugin.Config.VoteDependsOnRoundsWinned || UnlimitedRounds || MaxRoundsVoted)
+        {
+            return false;
+        }
+
+        if (RemainingRounds <= Plugin.Config.TriggerRoundsBeforEnd)
+            return true;
+
+        return CanClinch && RemainingWins <= Plugin.Config.TriggerRoundsBeforEnd;
     }
 }
