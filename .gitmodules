@@ -1,0 +1,3 @@
+[submodule "WASDMenuAPI"]
+	path = WASDMenuAPI
+	url = https://github.com/Interesting-exe/WASDMenuAPI.git

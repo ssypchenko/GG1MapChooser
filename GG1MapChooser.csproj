@@ -4,10 +4,12 @@
         <TargetFramework>net8.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <DefaultItemExcludes>WASDMenuAPI\**</DefaultItemExcludes>
     </PropertyGroup>
 
     <ItemGroup>
       <PackageReference Include="CounterStrikeSharp.API" Version="1.0.234" />
+      <ProjectReference Include="WASDMenuAPI/WASDSharedAPI/WASDSharedAPI.csproj" />
     </ItemGroup>
     <ItemGroup>
         <None Update="lang\**\*.*" CopyToOutputDirectory="PreserveNewest" />
