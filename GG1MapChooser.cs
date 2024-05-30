@@ -25,7 +25,7 @@ namespace MapChooser;
 public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
 {
     public override string ModuleName => "GG1_MapChooser";
-    public override string ModuleVersion => "v1.0.3";
+    public override string ModuleVersion => "v1.1.0";
     public readonly IStringLocalizer<MapChooser> _localizer;
     public MaxRoundsManager roundsManager;
     public MapChooser (IStringLocalizer<MapChooser> localizer)
@@ -486,9 +486,11 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             if (players[playerController.Slot] != null)
             {
                 if (players[playerController.Slot].selectedMaps.Count > 0)
-                selectedMapList = players[(int)playerController.Slot].selectedMaps;
-                haveSelectedMaps = true;
-                MapsMenu.AddMenuOption(Localizer["stop.line", selectedMapList.Count], action);
+                {
+                    selectedMapList = players[(int)playerController.Slot].selectedMaps;
+                    haveSelectedMaps = true;
+                    MapsMenu.AddMenuOption(Localizer["stop.line", selectedMapList.Count], action);
+                }
             }
             else
             {
@@ -552,9 +554,11 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             if (players[playerController.Slot] != null)
             {
                 if (players[playerController.Slot].selectedMaps.Count > 0)
-                selectedMapList = players[(int)playerController.Slot].selectedMaps;
-                haveSelectedMaps = true;
-                MapsMenu.Add(Localizer["stop.line", selectedMapList.Count], action);
+                {
+                    selectedMapList = players[(int)playerController.Slot].selectedMaps;
+                    haveSelectedMaps = true;
+                    MapsMenu.Add(Localizer["stop.line", selectedMapList.Count], action);
+                }
             }
             else
             {
