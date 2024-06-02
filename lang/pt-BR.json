@@ -10,7 +10,7 @@
   "player.choice": "{0} votou em {1}",
   "randommap.selected": "Falha na votação, o mapa aleatório {0} foi selecionado",
   "no.nomination": "Não é possível indicar o próximo mapa agora",
-  "map.nominated": "Mapa indicado com sucesso",
+  "map.nominated": "{0} mapa indicado com sucesso",
   "voted.already": "Você já votou para o mapa.",
   "nominated.already": "Este mapa já está indicado",
   "no.map": "Não há esse mapa no servidor: {0}",

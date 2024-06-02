@@ -10,7 +10,7 @@
   "player.choice": "{0} voted for {1}",
   "randommap.selected": "Voting failed, random map {0} is selected",
   "no.nomination": "Can't nominate next map now",
-  "map.nominated": "Map successfully nominated",
+  "map.nominated": "{0} map successfully nominated",
   "voted.already": "You have already voted for the map.",
   "nominated.already": "This map is already nominated",
   "no.map": "No such map on the server: {0}",
