@@ -25,7 +25,7 @@ namespace MapChooser;
 public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
 {
     public override string ModuleName => "GG1_MapChooser";
-    public override string ModuleVersion => "v1.1.0";
+    public override string ModuleVersion => "v1.2.0";
     public readonly IStringLocalizer<MapChooser> _localizer;
     public MaxRoundsManager roundsManager;
     public MapChooser (IStringLocalizer<MapChooser> localizer)
@@ -1885,10 +1885,6 @@ public class MCConfig : BasePluginConfig
     /* Sound when vote start */
     [JsonPropertyName("VoteStartSound")]
     public string VoteStartSound { get; set; } = "sounds/vo/announcer/cs2_classic/felix_broken_fang_pick_1_map_tk01.wav";
-
-    /* Use Workshop map numbers instead of map names from Collection */
-    [JsonPropertyName("WorkshopMapNumbers")]
-    public bool WorkshopMapNumbers { get; set; } = false;
 
     /* Check if problems with Workshop map (if it doesn't exists, server default map will be loaded, so plugin change to a random map) */
     [JsonPropertyName("WorkshopMapProblemCheck")]

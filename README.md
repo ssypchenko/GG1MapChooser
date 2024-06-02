@@ -9,12 +9,12 @@
 
 <h2>Features</h2>
 <ul>
-    <li><strong>Random Map Selection</strong> - Automatically selects the next map with configurable weights.</li>
-    <li><strong>Map Voting System</strong> - Players can vote on which maps to play next. If no one votes, the plugin chooses a random map from the list to vote.</li>
+    <li><strong>Map Voting System</strong> - Players can vote on which maps to play next. If no one votes, the plugin chooses a random map from the list.</li>
+    <li><strong>Rock The Vote (rtv)</strong> - Players can request to start a vote for a new map during the game.</li>
     <li><strong>Map Nominations</strong> - Players can nominate maps for voting.</li>
     <li><strong>Player Count Thresholds</strong> - Specify minimum and maximum player counts for maps to be included in the vote.</li>
-    <li><strong>Command Controls</strong> - Includes commands like rtv (rock the vote) and nominate for direct player interaction.</li>
-    <li><strong>Admin commands</strong> - Include commands for admins to start voting or change the map.</li>
+    <li><strong>Map Weights</strong> - Randomly selects maps to vote for the next map with configurable weights. The higher the weight, the more likely the map will be included in the vote list.</li>
+    <li><strong>Admin Commands</strong> - Includes commands for admins to start voting, to vote if players want to change the map, and to simply change the map.</li>
 </ul>
 
 <h2>Configuration Files</h2>
@@ -24,20 +24,28 @@
 <ul>
     <li>Minimum and maximum player counts for map eligibility.</li>
     <li>Map weighting (default is <strong>"1"</strong>).</li>
-    <li>Is it Workshop or classic map.</li>
+    <li>Specify if it is a Workshop or classic map.</li>
+    <li>For Workshop maps, set the workshop map ID to use maps without a collection.</li>
 </ul>
 
 <h3>Plugin Settings</h3>
 <p>Customize plugin behaviour in <code>csgo/addons/counterstrikesharp/configs/plugins/GG1MapChooser/GG1MapChooser.json</code>:</p>
 <ul>
     <li><code>RememberPlayedMaps</code> - Number of recent maps to exclude from upcoming votes.</li>
-    <li><code>RTVDelay</code> - Time delay at the start of the map during which rtv is disabled.</li>
+    <li><code>RTVDelay</code> - Time delay at the start of the map during which RTV is disabled.</li>
     <li><code>RTVInterval</code> - Cooldown period after a failed vote.</li>
-    <li><code>VotingTime</code> - Duration for players to cast their votes.</li>
-    <li><code>MapsInVote</code> - Number of maps in the voting pool <em>(5 is recommended value)</em>.</li>
-    <li><code>VotesToWin</code> - Percentage of votes needed to win the vote.</li>
+    <li><code>VotingTime</code> - Duration for players to cast their votes. Can be overridden in console commands.</li>
+    <li><code>MapsInVote</code> - Number of maps in the voting pool <em>(5 is the recommended value)</em>.</li>
+    <li><code>ExtendMapInVote</code> - Set to true to add the "Extend Map" menu item. It increases the "mp_timelimit" variable.</li>
+    <li><code>ExtendMapTimeSeconds</code> - Time in seconds to increase the "mp_timelimit" variable.</li>
+    <li><code>VotesToWin</code> - Percentage of votes needed to win the vote <em>(0.6 (60%) is the recommended value)</em>.</li>
     <li><code>RandomMapOnStart</code> - Enable changing to a random map on server restart.</li>
+    <li><code>RandomMapOnStartDelay</code> - Delay in seconds before changing to a random map on server restart.</li>
     <li><code>LastDisconnectedChangeMap</code> - Switch to a random map after the last player disconnects.</li>
+    <li><code>VoteStartSound</code> - Sound played to players when the map vote starts.</li>
+    <li><code>WorkshopMapProblemCheck</code> - Checks whether the voted or admin-chosen map is loaded and if not (in case of problems with the workshop map) loads a random map.</li>
+    <li><code>VoteDependsOnRoundWins</code> - Set to true if the vote start depends on the number of wins or rounds played.</li>
+    <li><code>TriggerRoundsBeforeEnd</code> - Number of rounds before the end of the match to start the vote. 0 - after the win or last round, 1 - one round before the last win, etc.</li>
 </ul>
 
 <h2>Usage</h2>
@@ -48,22 +56,31 @@
 
 <h2>Admin Commands</h2>
 <ul>
-    <li><strong>Map Change</strong> - Use <code>css_maps</code> or <code>!maps</code> to change the map manually or start a vote with standard or custom selections.</li>
-    <li><strong>Quick Map Selection</strong> - Use <code>ggmap &lt;partofmapname&gt;</code> helps find and switch to a map quickly by using a partial name match.</li>
+    <li><strong>Map Change:</strong> Use <code>css_maps</code> or <code>!maps</code> to open a menu with options: simply change the map (manually choose or automatic selection); start a vote with automatic or custom selections; start a vote to see if players agree to change the map.</li>
+    <li><strong>Quick Map Selection:</strong> Use <code>ggmap &lt;partofmapname&gt;</code> to quickly find and switch to a map using a partial name match.</li>
 </ul>
 
 <h3>External Controls:</h3>
 <ul>
-    <li><code>ggmc_mapvote_start [time]</code> - Trigger a map vote externally with an optional time parameter.</li>
-    <li><code>ggmc_auto_mapchange</code> - Automatically change a map to random map.</li>
-    <li><code>ggmc_nortv</code> - Disable the rtv command temporarily to maintain game continuity.</li>
+    <li><code>ggmc_mapvote_start [time]</code> - Trigger a map vote externally with an optional time parameter. This command starts the vote with automatic map selection and sets the "nextlevel" cvar to the winning map. This command can only be used with maps in the map list (GGMCmaps.json) from the collection or classic maps. In GunGame, we use it in the gungame.mapvote.cfg file to start the vote after the win or at a specified number of levels before the win.</li>
+    <li><code>ggmc_mapvote_with_change [time]</code> - Trigger a map vote externally with an optional time parameter and immediate map change after the vote ends. This command can be used with set workshop map IDs in the map list (GGMCmaps.json).</li>
+    <li><code>ggmc_auto_mapchange</code> - Automatically change to a random map.</li>
+    <li><code>ggmc_nortv</code> - Temporarily disable the RTV command to maintain game continuity.</li>
+</ul>
+
+<h2>Important Notes About Usage</h2>
+<ul>
+    <li>If the server has an assigned maps collection (<code>+host_workshop_collection [collection number]</code>), the map list in GGMCmaps.json can only have map names for the workshop maps from the assigned collection.</li>
+    <li>If maps are not from the collection, please fill in the "mapid" parameter with the map number in the map list.</li>
+    <li>If a map ID is set for the workshop map, the plugin will use it to change the map. If the map ID is not set, the plugin will try to change the map by the name, but if it is not included in the collection assigned to the server - nothing will happen. Workshop maps that are not from the collection cannot be used to set "nextlevel" when using the "ggmc_mapvote_start" command.</li>
 </ul>
 
 <h2>Disclaimer</h2>
 <p>The plugin is provided <strong>"as-is"</strong> and fulfills the specific requirements it was designed for. While I am not planning further major updates, I welcome suggestions that might benefit a broader user base, which could lead to additional features.</p>
 
 <h2>Credits</h2>
-<p>Thank you <a href="https://forums.alliedmods.net/showthread.php?t=134190">UMC Mapchooser</a> for the main ideas.</p>
+<p>Thank you to <a href="https://forums.alliedmods.net/showthread.php?t=134190">UMC Mapchooser</a> for the main ideas.</p>
+<p>Thanks to crashzk for the Portuguese translation.</p>
 
 <h2>Donations</h2>
 <a href="https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=APGJ8MXWRDX94">
