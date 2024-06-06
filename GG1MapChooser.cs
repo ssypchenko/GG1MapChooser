@@ -25,7 +25,7 @@ namespace MapChooser;
 public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
 {
     public override string ModuleName => "GG1_MapChooser";
-    public override string ModuleVersion => "v1.2.1";
+    public override string ModuleVersion => "v1.2.2";
     public readonly IStringLocalizer<MapChooser> _localizer;
     public MaxRoundsManager roundsManager;
     public MapChooser (IStringLocalizer<MapChooser> localizer)
@@ -66,6 +66,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     private int _votedMap;
     private string NoMapcycle = "[GGMC] Could not load mapcycle! Change Map will not work";
     private string? _selectedMap;
+    private string? _roundEndMap;
     private List<string> _playedMaps = new List<string>();
     public string MapToChange = ""; 
     public bool MapIsChanging = false;
@@ -114,6 +115,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                     return;
                 }
             }
+            _selectedMap = null;
             MapToChange = "";
             RestartProblems = 0;
 /*            if (!mapChangedOnStart ) // just in case to check that a map from workshop is loaded after the first restart
@@ -292,9 +294,9 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             
             AddTimer(delay, () =>
             {
-                if (_selectedMap != null)
+                if (_roundEndMap != null)
                 {
-                    DoMapChange(_selectedMap, SSMC_ChangeMapTime.ChangeMapTime_Now);
+                    DoMapChange(_roundEndMap, SSMC_ChangeMapTime.ChangeMapTime_Now);
                 }
                 else
                 {
@@ -1620,6 +1622,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             if (_selectedMap != null )
             {
                 IsVoteInProgress = false;
+                _roundEndMap = _selectedMap;
                 DoMapChange(_selectedMap, changeTime);
                 return;
             }
@@ -1630,11 +1633,12 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     }
     private void ResetData()
     {
+        Logger.LogInformation("ResetData");
         IsVoteInProgress = false;
         nominatedMaps.Clear();
         mapsToVote.Clear();
-        _votedMap = 0;
         _selectedMap = null;
+        _votedMap = 0;
         optionCounts = new Dictionary<string, int>(0);
         canRtv = true;
         CleanRTVArrays();
