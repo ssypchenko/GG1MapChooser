@@ -1,5 +1,6 @@
 {
   "mapchange.to": "O próximo mapa é {0}",
+  "extend.map": "Estender mapa",
   "timetovote.left": "{0} segundos restantes para votar",
   "nortv.time": "Não é possível iniciar o Rock the Vote por mais {0} segundos",
   "already.rtv": "Você já votou para Rock the Vote. Mais {0} necessário(s)",

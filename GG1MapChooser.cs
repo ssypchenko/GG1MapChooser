@@ -25,7 +25,7 @@ namespace MapChooser;
 public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
 {
     public override string ModuleName => "GG1_MapChooser";
-    public override string ModuleVersion => "v1.2.0";
+    public override string ModuleVersion => "v1.2.1";
     public readonly IStringLocalizer<MapChooser> _localizer;
     public MaxRoundsManager roundsManager;
     public MapChooser (IStringLocalizer<MapChooser> localizer)
@@ -52,6 +52,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     private int rtv_can_start { get; set; } = 0;
     private int rtv_need_more { get; set; }
     private Timer? rtvTimer = null;
+    private int rtvRestartProblems = 0;
     private Timer? changeRequested = null;
     private int RestartProblems = 0;
     private bool Restart = true;
@@ -91,10 +92,12 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         RegisterEventHandler<EventRoundEnd>(EventRoundEndHandler);
         RegisterEventHandler<EventRoundAnnounceLastRoundHalf>(EventRoundAnnounceLastRoundHalfHandler);
         RegisterEventHandler<EventRoundAnnounceMatchStart>(EventRoundAnnounceMatchStartHandler);
+        RegisterEventHandler<EventCsWinPanelMatch>(EventCsWinPanelMatchHandler);
         RegisterListener<Listeners.OnMapStart>(name =>
         {
             Logger.LogInformation(name + " loaded");
             ResetData();
+            KillRtvTimer();
             canVote = ReloadMapcycle();
             if (Config.WorkshopMapProblemCheck && MapToChange != "" && MapToChange != name) // case when the server loaded the map different from requested in case the collection is broken, so we need to restart the server to fix the collection
             {
@@ -157,11 +160,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                 changeRequested.Kill();
                 changeRequested = null;
             }
-            if (rtvTimer != null)
-            {
-                rtvTimer.Kill();
-                rtvTimer = null;
-            }
+            KillRtvTimer();
         });
         RegisterListener<Listeners.OnClientAuthorized>((slot, id) =>
         {
@@ -194,21 +193,22 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                 players[slot] = null!;
             } 
 
-            if (Config.LastDisconnectedChangeMap && changeRequested == null && !Restart)
+            var playerEntities = Utilities.GetPlayers().Where(p => IsValidPlayer(p));
+            if (playerEntities != null && playerEntities.Any())
             {
-                var playerEntities = Utilities.GetPlayers().Where(p => IsValidPlayer(p));
-                if (playerEntities != null && playerEntities.Any())
-                {
-                    return;
-                }
-                else
+                return;
+            }
+            else
+            {
+                ResetData();
+                if (Config.LastDisconnectedChangeMap && changeRequested == null && !Restart)
                 {
                     Logger.LogInformation($"Requested map change on last disconnected player");
                     changeRequested = AddTimer(60.0f, Timer_ChangeMapOnEmpty, TimerFlags.STOP_ON_MAPCHANGE);
                 }
             }
         });
-        
+                
         if (hotReload)
         {
             mapChangedOnStart = true;
@@ -233,6 +233,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         DeregisterEventHandler<EventRoundEnd>(EventRoundEndHandler);
         DeregisterEventHandler<EventRoundAnnounceLastRoundHalf>(EventRoundAnnounceLastRoundHalfHandler);
         DeregisterEventHandler<EventRoundAnnounceMatchStart>(EventRoundAnnounceMatchStartHandler);
+        DeregisterEventHandler<EventCsWinPanelMatch>(EventCsWinPanelMatchHandler);
     }
     public HookResult EventRoundAnnounceLastRoundHalfHandler(EventRoundAnnounceLastRoundHalf @event, GameEventInfo info)
     {
@@ -261,7 +262,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         }
         else
         {
-            Logger.LogInformation($"Round start, canVote {(canVote ? "True" : "False")}, Warmup {(roundsManager.WarmupRunning ? "True" : "False")}, CheckMaxRounds {(roundsManager.CheckMaxRounds() ? "True" : "False")} ");
+            Logger.LogInformation($"Round start, canVote {(canVote ? "True" : "False")}, Warmup {(roundsManager.WarmupRunning ? "True" : "False")} ");
         }
         return HookResult.Continue;
     }
@@ -278,6 +279,29 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             roundsManager.SwapScores();
 
         roundsManager.LastBeforeHalf = false;
+        return HookResult.Continue;
+    }
+    public HookResult EventCsWinPanelMatchHandler(EventCsWinPanelMatch @event, GameEventInfo info)
+    {
+        if (Config.ChangeMapAfterVote)
+        {
+            var delay = Config.EndOfMapDelayBeforeChangeSeconds - 5.0f;
+            if (delay < 0)
+                delay = 0;
+            Logger.LogInformation($"EventCsWinPanelMatch: plugin is responsible for map change, delay for {delay} seconds before the change of map.");
+            
+            AddTimer(delay, () =>
+            {
+                if (_selectedMap != null)
+                {
+                    DoMapChange(_selectedMap, SSMC_ChangeMapTime.ChangeMapTime_Now);
+                }
+                else
+                {
+                    Logger.LogWarning("EventCsWinPanelMatch: _selectedMap is null, so don't change");
+                }
+            });
+        }
         return HookResult.Continue;
     }
     private void Timer_ChangeMapOnEmpty()
@@ -410,13 +434,22 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             Logger.LogInformation($"DoMapChange: Map is changing already. Request to change to {mapChange} is cancelled");
             return;
         }
-        if (mapChange == "Extend Map")
+        if (mapChange == "extend.map")
         {
             var mp_timelimit = ConVar.Find("mp_timelimit");
             if (mp_timelimit != null)
             {
-                Logger.LogInformation($"DoMapChange: Extend Map is winning option. Time extended by {Config.ExtendMapTimeSeconds} seconds.");
-                mp_timelimit.SetValue(mp_timelimit.GetPrimitiveValue<float>() + Config.ExtendMapTimeSeconds);
+                var timelimit = mp_timelimit.GetPrimitiveValue<float>();
+                if (timelimit > 0)
+                {
+                    Logger.LogInformation($"DoMapChange: Extend Map is winning option. TimeLimit is {timelimit}. Time extended by {Config.ExtendMapTimeMinutes} minutes.");
+                    mp_timelimit.SetValue(mp_timelimit.GetPrimitiveValue<float>() + Config.ExtendMapTimeMinutes);
+                    Logger.LogInformation($"DoMapChange: TimeLimit now {mp_timelimit.GetPrimitiveValue<float>()}");
+                }
+                else
+                {
+                    Logger.LogError($"DoMapChange: Extend Map is winning option. But time can't be extended because of the cvar mp_timelimit is 0");
+                }
             }
             else
             {
@@ -995,19 +1028,18 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         {
             if (wasdmenu)
             {
-                voteMenuWM.Add("Extend Map", (player, option) =>
+                voteMenuWM.Add(Localizer["extend.map"], (player, option) =>
                 {
                     if (!votePlayers.Contains(player.Slot) && option != null && option.OptionDisplay != null)
                     {
                         votePlayers.Add(player.Slot);
                         
-                        if (!optionCounts.TryGetValue(option.OptionDisplay, out int count))
-                            optionCounts[option.OptionDisplay] = 1;
+                        if (!optionCounts.TryGetValue("extend.map", out int count))
+                            optionCounts["extend.map"] = 1;
                         else
-                            optionCounts[option.OptionDisplay] = count + 1;
+                            optionCounts["extend.map"] = count + 1;
                         _votedMap++;
                         PrintToServerChat("player.choice", player.PlayerName, option.OptionDisplay);
-    //                    Server.PrintToChatAll(Localizer["player.choice", player.PlayerName, option.Text]);
                     }
                     var manager = GetMenuManager();
                     if(manager == null)
@@ -1017,19 +1049,18 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             }
             else
             {
-                voteMenu.AddMenuOption("Extend Map", (player, option) =>
+                voteMenu.AddMenuOption(Localizer["extend.map"], (player, option) =>
                 {
                     if (!votePlayers.Contains(player.Slot))
                     {
                         votePlayers.Add(player.Slot);
                         
-                        if (!optionCounts.TryGetValue(option.Text, out int count))
-                            optionCounts[option.Text] = 1;
+                        if (!optionCounts.TryGetValue("extend.map", out int count))
+                            optionCounts["extend.map"] = 1;
                         else
-                            optionCounts[option.Text] = count + 1;
+                            optionCounts["extend.map"] = count + 1;
                         _votedMap++;
                         PrintToServerChat("player.choice", player.PlayerName, option.Text);
-    //                    Server.PrintToChatAll(Localizer["player.choice", player.PlayerName, option.Text]);
                     }
                 });
             }
@@ -1444,11 +1475,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             }
             return;
         }
-        if (voteTimer != null)
-        {
-            voteTimer.Kill();
-            voteTimer = null;
-        }
+        KillVoteTimer();
     }
     private Nominations GGMCNominationMenu (CCSPlayerController player)
     {
@@ -1590,9 +1617,9 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                 }
                 Logger.LogInformation($"[Selected map] {_selectedMap}");
             }
-            IsVoteInProgress = false;
             if (_selectedMap != null )
             {
+                IsVoteInProgress = false;
                 DoMapChange(_selectedMap, changeTime);
                 return;
             }
@@ -1611,11 +1638,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         optionCounts = new Dictionary<string, int>(0);
         canRtv = true;
         CleanRTVArrays();
-        if (rtvTimer != null)
-        {
-            rtvTimer.Kill();
-            rtvTimer = null;
-        }
+        rtvRestartProblems = 0;
         roundsManager.InitialiseMap();
     }
     private static bool IsValidPlayer (CCSPlayerController? p)
@@ -1644,6 +1667,22 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         }
         return clients;
     }
+    private void KillVoteTimer()
+    {
+        if (voteTimer != null)
+        {
+            voteTimer.Kill();
+            voteTimer = null;
+        }
+    }
+    private void KillRtvTimer()
+    {
+        if (rtvTimer != null)
+        {
+            rtvTimer.Kill();
+            rtvTimer = null;
+        }
+    }
     private void MakeRTVTimer (int interval)  // таймер для того, чтобы если кто-то напишет rtv, ему написали, через сколько секунд можно
     {
         canRtv = false;
@@ -1663,16 +1702,8 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             return;
         }
         if (canVote) canRtv = true;
-        if (rtvTimer != null)
-        {
-            rtvTimer.Kill();
-            rtvTimer = null;
-        }
-        if (voteTimer != null)
-        {
-            voteTimer.Kill();
-            voteTimer = null;
-        }
+        KillRtvTimer();
+        KillVoteTimer();
         return;
     }
     private bool IsRTVThreshold()
@@ -1718,11 +1749,19 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     private void StartRTV()
     {
         CleanRTVArrays();
-
+        Logger.LogInformation("Starting RTV vote");
         if (IsVoteInProgress)
         {
-            AddTimer(10.0f, StartRTV, TimerFlags.STOP_ON_MAPCHANGE); 
-            return; 
+            if (++rtvRestartProblems < 6)
+            {
+                AddTimer(10.0f, StartRTV, TimerFlags.STOP_ON_MAPCHANGE); 
+                Logger.LogInformation("Starting RTV: another vote in progress, waiting for 10 seconds more.");
+            }
+            else
+            {
+                Logger.LogError("Starting RTV: another vote in progress, waited a minute and stop rtv.");
+            }
+            return;
         }
         IsVoteInProgress = true;
         MakeRTVTimer(Config.RTVInterval);
@@ -1863,12 +1902,24 @@ public class MCConfig : BasePluginConfig
     public bool ExtendMapInVote { get; set; } = false;
 
     /* time to Extend Map */
-    [JsonPropertyName("ExtendMapTimeSeconds")]
-    public int ExtendMapTimeSeconds { get; set; } = 600;
+    [JsonPropertyName("ExtendMapTimeMinutes")]
+    public int ExtendMapTimeMinutes { get; set; } = 10;
 
     /* Percent of players required to win rtv. Spectators without a vote do not counts */
     [JsonPropertyName("VotesToWin")]
     public double VotesToWin { get; set; } = 0.6;
+
+    /* Plugin will Change the Map after the vote for map */
+    [JsonPropertyName("ChangeMapAfterVote")]
+    public bool ChangeMapAfterVote { get; set; } = false;
+
+    /* Delay before Plugin will Change the Map after the map end */
+    [JsonPropertyName("EndOfMapDelayBeforeChangeSeconds")]
+    public int EndOfMapDelayBeforeChangeSeconds { get; set; } = 20;
+
+    /* Sound when vote start */
+    [JsonPropertyName("VoteStartSound")]
+    public string VoteStartSound { get; set; } = "sounds/vo/announcer/cs2_classic/felix_broken_fang_pick_1_map_tk01.wav";
 
     /* Change map to random after the server restart */
     [JsonPropertyName("RandomMapOnStart")]
@@ -1882,10 +1933,6 @@ public class MCConfig : BasePluginConfig
     [JsonPropertyName("LastDisconnectedChangeMap")]
     public bool LastDisconnectedChangeMap { get; set; } = true;
     
-    /* Sound when vote start */
-    [JsonPropertyName("VoteStartSound")]
-    public string VoteStartSound { get; set; } = "sounds/vo/announcer/cs2_classic/felix_broken_fang_pick_1_map_tk01.wav";
-
     /* Check if problems with Workshop map (if it doesn't exists, server default map will be loaded, so plugin change to a random map) */
     [JsonPropertyName("WorkshopMapProblemCheck")]
     public bool WorkshopMapProblemCheck { get; set; } = true;
