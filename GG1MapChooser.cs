@@ -1889,7 +1889,7 @@ public class MCConfig : BasePluginConfig
     [JsonPropertyName("VotingTime")]
     public int VotingTime { get; set; } = 25;
 
-    /* End of Map Vote inWASD menu */
+    /* End of Map Vote in WASD menu */
     [JsonPropertyName("EndMapVoteWASDMenu")]
     public bool EndMapVoteWASDMenu { get; set; } = false;
     

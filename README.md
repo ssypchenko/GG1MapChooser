@@ -15,6 +15,7 @@
     <li><strong>Player Count Thresholds</strong> - Specify minimum and maximum player counts for maps to be included in the vote.</li>
     <li><strong>Map Weights</strong> - Randomly selects maps to vote for the next map with configurable weights. The higher the weight, the more likely the map will be included in the vote list.</li>
     <li><strong>Admin Commands</strong> - Includes commands for admins to start voting, to vote if players want to change the map, and to simply change the map.</li>
+    <li><strong>Map load at the game end</strong> - If this set in the config, plugin will be responsible for the load of the winning in vote map.</li>
 </ul>
 
 <h2>Configuration Files</h2>
@@ -35,14 +36,17 @@
     <li><code>RTVDelay</code> - Time delay at the start of the map during which RTV is disabled.</li>
     <li><code>RTVInterval</code> - Cooldown period after a failed vote.</li>
     <li><code>VotingTime</code> - Duration for players to cast their votes. Can be overridden in console commands.</li>
+    <li><code>EndMapVoteWASDMenu</code> - End of Map Vote in WASD menu (navigation by buttons W (up), A (down), S (previous menu), D (select menu item), "Tab" to exit).</li>
     <li><code>MapsInVote</code> - Number of maps in the voting pool <em>(5 is the recommended value)</em>.</li>
     <li><code>ExtendMapInVote</code> - Set to true to add the "Extend Map" menu item. It increases the "mp_timelimit" variable.</li>
-    <li><code>ExtendMapTimeSeconds</code> - Time in seconds to increase the "mp_timelimit" variable.</li>
+    <li><code>ExtendMapTimeMinutes</code> - Time in minutes to increase the "mp_timelimit" variable.</li>
     <li><code>VotesToWin</code> - Percentage of votes needed to win the vote <em>(0.6 (60%) is the recommended value)</em>.</li>
+    <li><code>ChangeMapAfterVote</code> - Plugin will Change the Map after the end of the game if a map selected after the vote.</li>
+    <li><code>EndOfMapDelayBeforeChangeSeconds</code> - Delay before Plugin will Change the Map after the map end. Should be at least 6 seconds more than the "VotingTime" parameter.</li>
+    <li><code>VoteStartSound</code> - Sound played to players when the map vote starts.</li>
     <li><code>RandomMapOnStart</code> - Enable changing to a random map on server restart.</li>
     <li><code>RandomMapOnStartDelay</code> - Delay in seconds before changing to a random map on server restart.</li>
     <li><code>LastDisconnectedChangeMap</code> - Switch to a random map after the last player disconnects.</li>
-    <li><code>VoteStartSound</code> - Sound played to players when the map vote starts.</li>
     <li><code>WorkshopMapProblemCheck</code> - Checks whether the voted or admin-chosen map is loaded and if not (in case of problems with the workshop map) loads a random map.</li>
     <li><code>VoteDependsOnRoundWins</code> - Set to true if the vote start depends on the number of wins or rounds played.</li>
     <li><code>TriggerRoundsBeforeEnd</code> - Number of rounds before the end of the match to start the vote. 0 - after the win or last round, 1 - one round before the last win, etc.</li>
@@ -80,7 +84,10 @@
 
 <h2>Credits</h2>
 <p>Thank you to <a href="https://forums.alliedmods.net/showthread.php?t=134190">UMC Mapchooser</a> for the main ideas.</p>
-<p>Thanks to crashzk for the Portuguese translation.</p>
+<p>Thanks to:
+<ul>
+<li>crashzk for the Portuguese translation,</li>
+<li>YuYueCraft for Chinese translation.</li></ul></p>
 
 <h2>Donations</h2>
 <a href="https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=APGJ8MXWRDX94">
