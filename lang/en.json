@@ -10,6 +10,7 @@
   "nortv.now": "Cannot Rock the Vote now.",
   "player.choice": "{0} voted for {1}",
   "randommap.selected": "Voting failed, random map {0} is selected",
+  "nominated.enough": "Maximum number of maps for vote already nominated",
   "no.nomination": "Can't nominate next map now",
   "map.nominated": "{0} map successfully nominated",
   "voted.already": "You have already voted for the map.",
@@ -21,7 +22,7 @@
   "maps.list": "List of maps:",
   "vote.inprogress": " {red}Another Vote{default} in progress now.",
   "stop.line": "Stop: ({0})",
-  "vote.notenough": "You have not selected enough cards to start voting.",
+  "vote.notenough": "You have not selected enough maps to start voting.",
   "maps.menu": "Maps Menu:",
   "change.map": "Simply Change Maps",
   "votefor.map": "Start Voting for Map",
@@ -38,5 +39,7 @@
   "manual.map": "Manual choice",
   "ggmap.usage": "Use: ggmap <mapname>",
   "ggmap.nomaps": "No similar map in list. Guess more",
-  "ggmap.change": "Map will be changed in 5 seconds."
+  "ggmap.change": "Map will be changed in 5 seconds.",
+  "nextmap.info": " {green}Next map: {0}",
+  "nextmap.none": " {red}Next map is not selected yet."
 } 

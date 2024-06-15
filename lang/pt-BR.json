@@ -10,6 +10,7 @@
   "nortv.now": "Não é possível iniciar o Rock the Vote agora.",
   "player.choice": "{0} votou em {1}",
   "randommap.selected": "Falha na votação, o mapa aleatório {0} foi selecionado",
+  "nominated.enough": "Número máximo de mapas para votação já nomeados",
   "no.nomination": "Não é possível indicar o próximo mapa agora",
   "map.nominated": "{0} mapa indicado com sucesso",
   "voted.already": "Você já votou para o mapa.",
@@ -21,7 +22,7 @@
   "maps.list": "Lista de mapas:",
   "vote.inprogress": " {red}Outra Votação{default} em andamento agora.",
   "stop.line": "Parar: ({0})",
-  "vote.notenough": "Você não selecionou cartas suficientes para começar a votação.",
+  "vote.notenough": "Você não selecionou mapas suficientes para começar a votar.",
   "maps.menu": "Menu de Mapas:",
   "change.map": "Simplesmente Mudar Mapas",
   "votefor.map": "Iniciar Votação para Mapa",
@@ -38,5 +39,7 @@
   "manual.map": "Escolha Manual",
   "ggmap.usage": "Uso: ggmap <nome do mapa>",
   "ggmap.nomaps": "Nenhum mapa semelhante na lista. Adivinhe mais",
-  "ggmap.change": "Mapa será alterado em 5 segundos."
+  "ggmap.change": "Mapa será alterado em 5 segundos.",
+  "nextmap.info": " {green}Próximo mapa: {0}",
+  "nextmap.none": " {red}O próximo mapa ainda não está selecionado."
 }

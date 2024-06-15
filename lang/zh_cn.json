@@ -10,6 +10,7 @@
   "nortv.now": "[系统] 目前无法进行rtv换图.",
   "player.choice": "[系统] {green}{0}{default}投票选择{green}{1}{default}",
   "randommap.selected": "[系统] 投票没通过,随机更换地图为{green}{0}{default}",
+  "nominated.enough": "[系统] 已提名足够多的地图供投票",
   "no.nomination": "[系统] 目前无法预定地图.",
   "map.nominated": "[系统] 成功预定地图.",
   "voted.already": "[系统] 你已经投过这张地图了.",
@@ -38,5 +39,7 @@
   "manual.map": "正常选择",
   "ggmap.usage": "[系统] 使用方法: {green}!ggmap <地图名>",
   "ggmap.nomaps": "[系统] 未找到相似地图,请再想想.",
-  "ggmap.change": "[系统] 将在5秒后更换地图."
+  "ggmap.change": "[系统] 将在5秒后更换地图.",
+  "nextmap.info": "[系统] {green}下一张地图",
+  "nextmap.none": "[系统] {red}尚未选择下一张地图"
 } 
