@@ -1,3 +1,6 @@
 [submodule "WASDMenuAPI"]
 	path = WASDMenuAPI
 	url = https://github.com/Interesting-exe/WASDMenuAPI.git
+[submodule "ggmcAPI"]
+	path = ggmcAPI
+	url = https://github.com/ssypchenko/ggmcAPI.git
