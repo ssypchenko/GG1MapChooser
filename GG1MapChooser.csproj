@@ -4,15 +4,17 @@
         <TargetFramework>net8.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <DefaultItemExcludes>WASDMenuAPI\**</DefaultItemExcludes>
+        <DefaultItemExcludes>WASDMenuAPI\**;ggmcAPI\**</DefaultItemExcludes>
     </PropertyGroup>
 
     <ItemGroup>
       <PackageReference Include="CounterStrikeSharp.API" Version="1.0.242" />
+    </ItemGroup>
+    <ItemGroup>
       <ProjectReference Include="WASDMenuAPI/WASDSharedAPI/WASDSharedAPI.csproj" />
     </ItemGroup>
     <ItemGroup>
-      <ProjectReference Include="/Users/sergeysypchenko/css-development/ggmcAPI/ggmcAPI.csproj" />
+      <ProjectReference Include="ggmcAPI/ggmcAPI.csproj" />
     </ItemGroup>
     <ItemGroup>
         <None Update="lang\**\*.*" CopyToOutputDirectory="PreserveNewest" />
