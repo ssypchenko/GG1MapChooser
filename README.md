@@ -50,6 +50,8 @@
     <li><code>WorkshopMapProblemCheck</code> - Checks whether the voted or admin-chosen map is loaded and if not (in case of problems with the workshop map) loads a random map.</li>
     <li><code>VoteDependsOnRoundWins</code> - Set to true if the vote start depends on the number of wins or rounds played.</li>
     <li><code>TriggerRoundsBeforeEnd</code> - Number of rounds before the end of the match to start the vote. 0 - after the win or last round, 1 - one round before the last win, etc.</li>
+    <li><code>VoteDependsOnTimeLimit</code> - Set to true if the vote start depends on the time limit to play.</li>
+    <li><code>TriggerSecondsBeforEnd</code> - Number of seconds before the end of the round to start the vote. The round time is defined in cvar "mp_timelimit"</li>
 </ul>
 
 <h2>Usage</h2>
