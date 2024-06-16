@@ -22,7 +22,7 @@
   "maps.list": "请选择预定地图",
   "vote.inprogress": " {red}[系统] 投票已经开始了.",
   "stop.line": "延长地图: ({0})",
-  "vote.notenough": "[系统] 卡片不足,无法开始投票.",
+  "vote.notenough": "[系统] 地图不足，无法开始投票",
   "maps.menu": "地图菜单",
   "change.map": "直接更换地图",
   "votefor.map": "开始rtv地图投票",
