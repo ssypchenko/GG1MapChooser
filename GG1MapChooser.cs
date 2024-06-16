@@ -1946,6 +1946,29 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             }
         }
     }
+    private void PrintToServerCenterHTML(string message, params object[] arguments)
+    {
+        var playerEntities = Utilities.GetPlayers().Where(p => IsValidPlayer(p));
+        if (playerEntities != null && playerEntities.Any())
+        {
+            foreach (var player in playerEntities)
+            {
+                PrintToPlayerCenterHTML(player, message, arguments);
+            }
+        }
+    }
+    private void PrintToPlayerCenterHTML(CCSPlayerController player, string message, params object[] arguments)
+    {
+        if (IsValidPlayer(player))
+        {
+            string text;
+            using (new WithTemporaryCulture(player.GetLanguage()))
+            {
+                text = _localizer[message, arguments];
+            }
+            player.PrintToCenterHtml(text);
+        }
+    }
     private string ClearSuffix (string mapName)
     {
         string suffix = " (!)";
