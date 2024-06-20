@@ -46,14 +46,26 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             Config.MapsInVote = 5;
             Logger.LogInformation("Set MapsInVote to 5 on plugin load because of an error in config.");
         }
-        if (Config.VoteDependsOnRoundsWinned)
+        if (Config.ChangeMapAfterWinDraw && Config.ChangeMapAfterVote)
         {
+            Logger.LogError("ChangeMapAfterWinDraw may not work because ChangeMapAfterVote set true");
+        }
+        if (Config.VoteDependsOnRoundWins)
+        {
+            if (Config.ChangeMapAfterVote)
+            {
+                Logger.LogError("VoteDependsOnRoundWins will not work because ChangeMapAfterVote set true");
+            }
             var MaxRounds = ConVar.Find("mp_maxrounds");
             var MaxRoundsValue = MaxRounds?.GetPrimitiveValue<int>() ?? 0;
             if (MaxRoundsValue < 2)
             {
                 Logger.LogError($"VoteDependsOnRoundWins set true, but cvar mp_maxrounds set less than 2. Plugin can't work correctly with these settings.");
             }
+        }
+        if (Config.VoteDependsOnRoundWins && Config.VoteDependsOnTimeLimit)
+        {
+            Logger.LogError("VoteDependsOnRoundWins may not work because VoteDependsOnTimeLimit set true");
         }
         if (Config.VoteDependsOnTimeLimit)
         {
@@ -63,11 +75,10 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             {
                 Logger.LogError($"VoteDependsOnTimeLimit set true, but cvar mp_timelimit set less than 1. Plugin can't work correctly with these settings.");
             }
-            var timeToVote = Config.VotingTime + 6;
-            if (Config.TriggerSecondsBeforEnd < timeToVote)
+            if (Config.TriggerSecondsBeforEnd < Config.VotingTime)
             {
-                Config.TriggerSecondsBeforEnd = timeToVote;
-                Logger.LogInformation($"VoteDependsOnTimeLimit: TriggerSecondsBeforEnd updates to {timeToVote} which is minimum value for VotingTime {Config.VotingTime} in config.");
+                Config.TriggerSecondsBeforEnd = Config.VotingTime + 1;
+                Logger.LogInformation($"VoteDependsOnTimeLimit: TriggerSecondsBeforEnd updates to {Config.VotingTime + 1} which is minimum value for VotingTime {Config.VotingTime} in config.");
             }
             if (Config.TriggerSecondsBeforEnd < (TimeLimitValue * 60))
             {
@@ -324,25 +335,29 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                 roundsManager.MaxRoundsVoted = true;
                 StartVote();
             }
-            else
-            {
-                Logger.LogInformation($"Round start, canVote {(canVote ? "True" : "False")}, Warmup {(roundsManager.WarmupRunning ? "True" : "False")} ");
-            }
-            if (Config.VoteDependsOnTimeLimit)
+            else if (Config.VoteDependsOnTimeLimit)
             {
                 var TimeLimit = ConVar.Find("mp_timelimit");
                 var TimeLimitValue = TimeLimit?.GetPrimitiveValue<float>() ?? 0;
-                var timeToVote = Config.VotingTime + 6;
 
-                if ((TimeLimitValue * 60) > Config.TriggerSecondsBeforEnd && Config.TriggerSecondsBeforEnd > timeToVote)
+                if ((TimeLimitValue * 60) > Config.TriggerSecondsBeforEnd && Config.TriggerSecondsBeforEnd > Config.VotingTime)
                 {
+                    Logger.LogInformation($"RoundStart: Vote timer started for {Config.TriggerSecondsBeforEnd} seconds less than round time {TimeLimitValue} min");
                     _timeLimitTimer = AddTimer((float)((TimeLimitValue * 60) - Config.TriggerSecondsBeforEnd), TimeLimitTimerHandle, TimerFlags.STOP_ON_MAPCHANGE);
                 }
                 else
                 {
-                    Logger.LogError($"Vote Depends On TimeLimit can't be started");
+                    Logger.LogError($"Vote Depends On TimeLimit can't be started: round time {TimeLimitValue} min, vote start {Config.TriggerSecondsBeforEnd} seconds before end");
                 }
             }
+            else
+            {
+                Logger.LogInformation($"Round start, canVote {(canVote ? "True" : "False")}, Warmup {(roundsManager.WarmupRunning ? "True" : "False")} ");
+            }
+        }
+        else
+        {
+            Logger.LogError("Can't vote");
         }
         return HookResult.Continue;
     }
@@ -370,22 +385,29 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     {
         if (Config.ChangeMapAfterWinDraw)
         {
-            var delay = Config.DelayBeforeChangeSeconds - 5.0f;
-            if (delay < 0)
-                delay = 0;
-            Logger.LogInformation($"EventCsWinPanelMatch: plugin is responsible for map change, delay for {delay} seconds before the change of map.");
-            
-            AddTimer(delay, () =>
+            if (_roundEndMap != null)
             {
-                if (_roundEndMap != null)
+                var delay = Config.DelayBeforeChangeSeconds - 5.0f;
+                if (delay < 1)
+                    delay = 1.0f;
+                Logger.LogInformation($"EventCsWinPanelMatch: plugin is responsible for map change, delay for {delay} seconds before the change of map.");
+                
+                AddTimer(delay, () =>
                 {
-                    DoMapChange(_roundEndMap, SSMC_ChangeMapTime.ChangeMapTime_Now);
-                }
-                else
-                {
-                    Logger.LogWarning("EventCsWinPanelMatch: _roundEndMap is null, so don't change");
-                }
-            });
+                    if (_roundEndMap != null)
+                    {
+                        DoMapChange(_roundEndMap, SSMC_ChangeMapTime.ChangeMapTime_Now);
+                    }
+                    else
+                    {
+                        Logger.LogWarning("EventCsWinPanelMatch: _roundEndMap is null, so don't change");
+                    }
+                });
+            }
+            else
+            {
+                Logger.LogError("Can't change map after Win/Draw because _roundEndMap is null");
+            }
         }
         return HookResult.Continue;
     }
@@ -557,10 +579,10 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         }
         MapIsChanging = true;
         string mapname = mapChange;
-        _selectedMap = null;
+//        _selectedMap = null;
         PrintToServerCenter("mapchange.to", mapname);
-        
         Console.WriteLine($"Map is changing to {mapname}");
+        Logger.LogInformation($"DoMapChange: Map is going to be change to {mapname}");
         MapToChange = mapname;
         if (changeTime == SSMC_ChangeMapTime.ChangeMapTime_Now)
         {
@@ -2090,15 +2112,15 @@ public class MCConfig : BasePluginConfig
     [JsonPropertyName("VotesToWin")]
     public double VotesToWin { get; set; } = 0.6;
 
-    /* Plugin will Change the Map after the vote for map */
+    /* Plugin will Change to Map voted before, after the win or draw event */
     [JsonPropertyName("ChangeMapAfterWinDraw")]
     public bool ChangeMapAfterWinDraw { get; set; } = false;
 
-    /* Plugin will Change the Map after the vote for map */
+    /* Plugin will Change the Map after the vote for map.  */
     [JsonPropertyName("ChangeMapAfterVote")]
     public bool ChangeMapAfterVote { get; set; } = false;
 
-    /* Delay before Plugin will Change the Map after the map end */
+    /* Delay before Plugin will Change the Map after the events: Win/Draw event (ChangeMapAfterWinDraw); Vote ended (ChangeMapAfterVote) */
     [JsonPropertyName("DelayBeforeChangeSeconds")]
     public int DelayBeforeChangeSeconds { get; set; } = 20;
 
@@ -2118,15 +2140,15 @@ public class MCConfig : BasePluginConfig
     [JsonPropertyName("LastDisconnectedChangeMap")]
     public bool LastDisconnectedChangeMap { get; set; } = true;
     
-    /* Check if problems with Workshop map (if it doesn't exists, server default map will be loaded, so plugin change to a random map) */
+    /* Check if problems with Workshop map  in collection (if it doesn't exists, server default map will be loaded, so plugin change to a random map) */
     [JsonPropertyName("WorkshopMapProblemCheck")]
     public bool WorkshopMapProblemCheck { get; set; } = true;
 
     /* Set True if Vote start depends on number of Round Wins by CT or T  */
     [JsonPropertyName("VoteDependsOnRoundWins")]
-    public bool VoteDependsOnRoundsWinned { get; set; } = false;
+    public bool VoteDependsOnRoundWins { get; set; } = false;
     
-    /* Number of maps in votre for players 1-7 */
+    /* Number of rounds before the game end to start a vote, usually 1. 0 does not work :( */
     [JsonPropertyName("TriggerRoundsBeforEnd")]
     public int TriggerRoundsBeforEnd { get; set; } = 1;
 
@@ -2263,7 +2285,7 @@ public class MaxRoundsManager
     public bool CheckMaxRounds()
     {
         Plugin.Logger.LogInformation($"UnlimitedRounds {(UnlimitedRounds ? "true" : "false")}, RemainingRounds {RemainingRounds}, RemainingWins {RemainingWins}");
-        if (!Plugin.Config.VoteDependsOnRoundsWinned || UnlimitedRounds || MaxRoundsVoted)
+        if (!Plugin.Config.VoteDependsOnRoundWins || UnlimitedRounds || MaxRoundsVoted)
         {
             return false;
         }
