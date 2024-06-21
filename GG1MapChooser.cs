@@ -50,23 +50,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         {
             Logger.LogError("ChangeMapAfterWinDraw may not work because ChangeMapAfterVote set true");
         }
-        if (Config.VoteDependsOnRoundWins)
-        {
-            if (Config.ChangeMapAfterVote)
-            {
-                Logger.LogError("VoteDependsOnRoundWins will not work because ChangeMapAfterVote set true");
-            }
-            var MaxRounds = ConVar.Find("mp_maxrounds");
-            var MaxRoundsValue = MaxRounds?.GetPrimitiveValue<int>() ?? 0;
-            if (MaxRoundsValue < 2)
-            {
-                Logger.LogError($"VoteDependsOnRoundWins set true, but cvar mp_maxrounds set less than 2. Plugin can't work correctly with these settings.");
-            }
-        }
-        if (Config.VoteDependsOnRoundWins && Config.VoteDependsOnTimeLimit)
-        {
-            Logger.LogError("VoteDependsOnRoundWins may not work because VoteDependsOnTimeLimit set true");
-        }
+        roundsManager.CheckConfig();
         if (Config.VoteDependsOnTimeLimit)
         {
             var TimeLimit = ConVar.Find("mp_timelimit");
@@ -2294,6 +2278,25 @@ public class MaxRoundsManager
             return true;
 
         return CanClinch && RemainingWins <= Plugin.Config.TriggerRoundsBeforEnd;
+    }
+    public void CheckConfig()
+    {
+        if (Plugin.Config.VoteDependsOnRoundWins)
+        {
+            if (Plugin.Config.ChangeMapAfterVote)
+            {
+                Plugin.Logger.LogError("VoteDependsOnRoundWins will not work because ChangeMapAfterVote set true");
+            }
+            MaxRoundsValue = CvarMaxRounds?.GetPrimitiveValue<int>() ?? 0;
+            if (MaxRoundsValue < 2)
+            {
+                Plugin.Logger.LogError($"VoteDependsOnRoundWins set true, but cvar mp_maxrounds set less than 2. Plugin can't work correctly with these settings.");
+            }
+            if (Plugin.Config.VoteDependsOnTimeLimit)
+            {
+                Plugin.Logger.LogError("VoteDependsOnRoundWins may not work because VoteDependsOnTimeLimit set true");
+            }
+        }
     }
 }
 public class MCCoreAPI : MCIAPI
