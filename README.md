@@ -41,8 +41,9 @@
     <li><code>ExtendMapInVote</code> - Set to true to add the "Extend Map" menu item. It increases the "mp_timelimit" variable.</li>
     <li><code>ExtendMapTimeMinutes</code> - Time in minutes to increase the "mp_timelimit" variable.</li>
     <li><code>VotesToWin</code> - Percentage of votes needed to win the vote <em>(0.6 (60%) is the recommended value)</em>.</li>
-    <li><code>ChangeMapAfterVote</code> - Plugin will Change the Map after the end of the game if a map selected after the vote.</li>
-    <li><code>EndOfMapDelayBeforeChangeSeconds</code> - Delay before Plugin will Change the Map after the map end. Should be at least 6 seconds more than the "VotingTime" parameter.</li>
+    <li><code>ChangeMapAfterWinDraw</code> - Plugin will Change the Map after the end of the game if a map selected after the vote.</li>
+    <li><code>ChangeMapAfterVote</code> - Plugin will Change the Map immediately after the vote.</li>
+    <li><code>DelayBeforeChangeSeconds</code> - Delay before Plugin will Change the Map after the events: Win/Draw event (ChangeMapAfterWinDraw); Vote ended (ChangeMapAfterVote)</li>
     <li><code>VoteStartSound</code> - Sound played to players when the map vote starts.</li>
     <li><code>RandomMapOnStart</code> - Enable changing to a random map on server restart.</li>
     <li><code>RandomMapOnStartDelay</code> - Delay in seconds before changing to a random map on server restart.</li>
@@ -58,6 +59,19 @@
 <ul>
     <li><strong>Voting:</strong> Players can initiate a map vote using <code>!rtv</code> or <code>rtv</code> in chat. The required percentage of votes to start a vote is controlled by the <code>VotesToWin</code> setting.</li>
     <li><strong>Nominating:</strong> Players can nominate a map by typing <code>!nominate &lt;mapname&gt;</code> or simply <code>nominate</code> to bring up a list of eligible maps based on current server conditions.</li>
+</ul>
+
+<h2>Setup Examples</h2>
+<ul>
+    <li>If you call the vote from external plugin you have two options:
+        <ul>
+            <li>Use "ggmc_mapvote_start" if the external plugin ends the game so the server will change the map after the Win/Draw</li>
+            <li>Use "ggmc_mapvote_with_change" command if you want that mapchooser changes the map itself immediately after the vote.</li>
+        </ul>
+        <p>In that case you need to have "ChangeMapAfterWinDraw": false, "ChangeMapAfterVote": false, "VoteDependsOnRoundWins": false, "VoteDependsOnTimeLimit": false.</p>
+    </li>
+    <li>If you play several rounds and want to have a vote one round before the end you set:<br>"ChangeMapAfterWinDraw": true, "ChangeMapAfterVote": false, "VoteDependsOnRoundWins": true, "VoteDependsOnTimeLimit": false.</li>
+    <li>If you play one long round and want to have the vote before tha end of that round, you set:<br>"ChangeMapAfterWinDraw": false, "ChangeMapAfterVote": true, "VoteDependsOnRoundWins": false, "VoteDependsOnTimeLimit": true. Take attention that "TriggerSecondsBeforEnd" should be more that "VotingTime", otherwise the vote will not have time to finish.</li>
 </ul>
 
 <h2>Admin Commands</h2>
