@@ -25,7 +25,7 @@ namespace MapChooser;
 public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
 {
     public override string ModuleName => "GG1_MapChooser";
-    public override string ModuleVersion => "v1.2.4";
+    public override string ModuleVersion => "v1.2.5";
     public override string ModuleAuthor => "Sergey";
     public override string ModuleDescription => "Map chooser, voting, rtv, nominate, etc.";
     public MCCoreAPI MCCoreAPI { get; set; } = null!;
@@ -50,6 +50,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         {
             Logger.LogError("ChangeMapAfterWinDraw may not work because ChangeMapAfterVote set true");
         }
+        roundsManager.InitialiseMap();
         roundsManager.CheckConfig();
         if (Config.VoteDependsOnTimeLimit)
         {
@@ -2186,16 +2187,12 @@ public class MaxRoundsManager
     public MaxRoundsManager (MapChooser plugin)
     {
         Plugin = plugin;
-        CvarMaxRounds = ConVar.Find("mp_maxrounds");
-        CvarCanClinch = ConVar.Find("mp_match_can_clinch");
-        MaxRoundsValue = CvarMaxRounds?.GetPrimitiveValue<int>() ?? 0;
-        CanClinch = CvarCanClinch?.GetPrimitiveValue<bool>() ?? true;
+        MaxRoundsValue = -1;
+        CanClinch = true;
     }
     MapChooser Plugin;
     private int CTWins = 0;
     private int TWins = 0;
-    public ConVar? CvarMaxRounds;
-    public ConVar? CvarCanClinch;
     public bool MaxRoundsVoted = false;
     public int MaxRoundsValue;
     public bool CanClinch;
@@ -2204,11 +2201,29 @@ public class MaxRoundsManager
     public bool WarmupRunning => Plugin.GameRules?.WarmupPeriod ?? false;
     public void InitialiseMap()
     {
-        MaxRoundsValue = CvarMaxRounds?.GetPrimitiveValue<int>() ?? 0;
-        CanClinch = CvarCanClinch?.GetPrimitiveValue<bool>() ?? true;
+        var CvarMaxRounds = ConVar.Find("mp_maxrounds");
+        if (CvarMaxRounds != null)
+        {    
+            MaxRoundsValue = CvarMaxRounds.GetPrimitiveValue<int>();
+            Plugin.Logger.LogInformation($"On Initialise Map set: MaxRoundsValue {MaxRoundsValue}");
+        }
+        else
+        {
+            Plugin.Logger.LogInformation($"On Initialise Map cant set: MaxRoundsValue because CvarMaxRounds is null");
+        }
+
+        var CvarCanClinch = ConVar.Find("mp_match_can_clinch");
+        if (CvarCanClinch != null)
+        {
+            CanClinch = CvarCanClinch.GetPrimitiveValue<bool>();
+            Plugin.Logger.LogInformation($"On Initialise Map set: CanClinch {(CanClinch ? "true" : "false")}");
+        }
+        else
+        {
+            Plugin.Logger.LogInformation($"On Initialise Map cant set: CanClinch because CvarCanClinch is null");
+        }
         ClearRounds();
         MaxRoundsVoted = false;
-        Plugin.Logger.LogInformation($"On Initialise Map set: MaxRoundsValue {MaxRoundsValue}, CanClinch {(CanClinch ? "true" : "false")}");
     }
     public int RemainingRounds
     {
@@ -2287,7 +2302,6 @@ public class MaxRoundsManager
             {
                 Plugin.Logger.LogError("VoteDependsOnRoundWins will not work because ChangeMapAfterVote set true");
             }
-            MaxRoundsValue = CvarMaxRounds?.GetPrimitiveValue<int>() ?? 0;
             if (MaxRoundsValue < 2)
             {
                 Plugin.Logger.LogError($"VoteDependsOnRoundWins set true, but cvar mp_maxrounds set less than 2. Plugin can't work correctly with these settings.");
