@@ -2277,7 +2277,7 @@ public class MaxRoundsManager
         if (RemainingRounds <= Plugin.Config.TriggerRoundsBeforEnd)
             return true;
 
-        return CanClinch && RemainingWins <= Plugin.Config.TriggerRoundsBeforEnd;
+        return CanClinch && (RemainingWins <= Plugin.Config.TriggerRoundsBeforEnd);
     }
     public void CheckConfig()
     {
