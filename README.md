@@ -43,6 +43,7 @@
     <li><code>VotesToWin</code> - Percentage of votes needed to win the vote <em>(0.6 (60%) is the recommended value)</em>.</li>
     <li><code>ChangeMapAfterWinDraw</code> - Plugin will Change the Map after the end of the game if a map selected after the vote.</li>
     <li><code>ChangeMapAfterVote</code> - Plugin will Change the Map immediately after the vote.</li>
+    <li><code>ChangeMapAfterTimeLimit</code> - Plugin will Change the Map after the end of the map (accoring to mp_timelimit).</li>
     <li><code>DelayBeforeChangeSeconds</code> - Delay before Plugin will Change the Map after the events: Win/Draw event (ChangeMapAfterWinDraw); Vote ended (ChangeMapAfterVote)</li>
     <li><code>VoteStartSound</code> - Sound played to players when the map vote starts.</li>
     <li><code>RandomMapOnStart</code> - Enable changing to a random map on server restart.</li>
@@ -52,7 +53,7 @@
     <li><code>VoteDependsOnRoundWins</code> - Set to true if the vote start depends on the number of wins or rounds played.</li>
     <li><code>TriggerRoundsBeforeEnd</code> - Number of rounds before the end of the match to start the vote. 0 - after the win or last round, 1 - one round before the last win, etc.</li>
     <li><code>VoteDependsOnTimeLimit</code> - Set to true if the vote start depends on the time limit to play.</li>
-    <li><code>TriggerSecondsBeforEnd</code> - Number of seconds before the end of the round to start the vote. The round time is defined in cvar "mp_timelimit"</li>
+    <li><code>TriggerSecondsBeforEnd</code> - Number of seconds before the end of the map to start the vote. The map time is defined in cvar "mp_timelimit"</li>
 </ul>
 
 <h2>Usage</h2>
@@ -71,7 +72,7 @@
         <p>In that case you need to have "ChangeMapAfterWinDraw": false, "ChangeMapAfterVote": false, "VoteDependsOnRoundWins": false, "VoteDependsOnTimeLimit": false.</p>
     </li>
     <li>If you play several rounds and want to have a vote one round before the end you set:<br>"ChangeMapAfterWinDraw": true, "ChangeMapAfterVote": false, "VoteDependsOnRoundWins": true, "VoteDependsOnTimeLimit": false.</li>
-    <li>If you play one long round and want to have the vote before tha end of that round, you set:<br>"ChangeMapAfterWinDraw": false, "ChangeMapAfterVote": true, "VoteDependsOnRoundWins": false, "VoteDependsOnTimeLimit": true. Take attention that "TriggerSecondsBeforEnd" should be more that "VotingTime", otherwise the vote will not have time to finish.</li>
+    <li>If you play one long round or just limited time and want to have the vote before tha end of that time (defined in mp_timelimit), you set:<br>"VoteDependsOnTimeLimit": true, "ChangeMapAfterTimeLimit": true,  "ChangeMapAfterWinDraw": false, "ChangeMapAfterVote": false, "VoteDependsOnRoundWins": false. Take attention that "TriggerSecondsBeforEnd" should be more that "VotingTime", otherwise the vote will not have time to finish.</li>
 </ul>
 
 <h2>Admin Commands</h2>
@@ -86,6 +87,7 @@
     <li><code>ggmc_mapvote_with_change [time]</code> - Trigger a map vote externally with an optional time parameter and immediate map change after the vote ends. This command can be used with set workshop map IDs in the map list (GGMCmaps.json).</li>
     <li><code>ggmc_auto_mapchange</code> - Automatically change to a random map.</li>
     <li><code>ggmc_nortv</code> - Temporarily disable the RTV command to maintain game continuity.</li>
+    <li><code>ggmc_reload_maps</code> - Command to reload maps file. It reloads every map start, but you can reload it manually if necessary.</li>
 </ul>
 
 <h2>Important Notes About Usage</h2>
@@ -93,6 +95,7 @@
     <li>If the server has an assigned maps collection (<code>+host_workshop_collection [collection number]</code>), the map list in GGMCmaps.json can only have map names for the workshop maps from the assigned collection.</li>
     <li>If maps are not from the collection, please fill in the "mapid" parameter with the map number in the map list.</li>
     <li>If a map ID is set for the workshop map, the plugin will use it to change the map. If the map ID is not set, the plugin will try to change the map by the name, but if it is not included in the collection assigned to the server - nothing will happen. Workshop maps that are not from the collection cannot be used to set "nextlevel" when using the "ggmc_mapvote_start" command.</li>
+    <li>If a map ID is set for the workshop map, it does not matter what you name the maps. The names can be attractive, for example "Mini Circular" instead of "gg_mini_circular" which is the workshop name. However, in this case you won't be able to use the WorkshopMapProblemCheck feature to check if the requested map is loaded or if it is missing in the workshop, because the map owner can delete the map at any time.</li>
 </ul>
 
 <h2>Disclaimer</h2>
