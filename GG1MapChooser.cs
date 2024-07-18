@@ -25,7 +25,7 @@ namespace MapChooser;
 public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
 {
     public override string ModuleName => "GG1_MapChooser";
-    public override string ModuleVersion => "v1.2.6";
+    public override string ModuleVersion => "v1.2.7";
     public override string ModuleAuthor => "Sergey";
     public override string ModuleDescription => "Map chooser, voting, rtv, nominate, etc.";
     public MCCoreAPI MCCoreAPI { get; set; } = null!;
@@ -302,7 +302,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                 }
                 else
                 {
-                    Logger.LogInformation($"MapStart: Vote timer started for {Config.TriggerSecondsBeforEnd} seconds less than the end of the round in {TimeLimitValue} min");
+                    Logger.LogInformation($"MapStart: Vote timer started for {Config.TriggerSecondsBeforEnd} seconds less than the end of the map in {TimeLimitValue} min");
                     _timeLimitTimer = AddTimer((float)((TimeLimitValue * 60) - Config.TriggerSecondsBeforEnd), TimeLimitTimerHandle, TimerFlags.STOP_ON_MAPCHANGE);
                 }
             }
@@ -605,8 +605,9 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                             _timeLimitTimer.Kill();
                             _timeLimitTimer = null;
                         }
+                        roundsManager.MaxRoundsVoted = false;
                         _timeLimitTimer = AddTimer(newVoteDelay, TimeLimitTimerHandle, TimerFlags.STOP_ON_MAPCHANGE);
-                        Logger.LogInformation($"DoMapChange: New TimeLimit timer started in {newVoteDelay} seconds before end");
+                        Logger.LogInformation($"DoMapChange: Seconds passed: {secondsPassed}, New TimeLimit timer started in {newVoteDelay} seconds before end");
                     }
                 }
                 else
@@ -1081,7 +1082,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                     MenuManager.OpenChatMenu(player, ChangeOrNotMenu);
                 }
 
-                AddTimer((float)timeToVote, () => TimerChangeOrNot());
+                AddTimer((float)timeToVote, () => TimerChangeOrNot(), TimerFlags.STOP_ON_MAPCHANGE);
             }
         }
     }
@@ -1371,7 +1372,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             player.ExecuteClientCommand("play " + Config.VoteStartSound);
         }
 
-        AddTimer((float)timeToVote, () => TimerVoteMap(changeTime));
+        AddTimer((float)timeToVote, () => TimerVoteMap(changeTime), TimerFlags.STOP_ON_MAPCHANGE);
     }
 
     [GameEventHandler(HookMode.Post)]
@@ -1879,7 +1880,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                 {
                     Logger.LogInformation($"TimerVoteMap: Can't call ChangeMapInFive");
                 }
-            });
+            }, TimerFlags.STOP_ON_MAPCHANGE);
         }
         if (mapsToVote.Count > 0)
         {
