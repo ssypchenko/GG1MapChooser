@@ -25,7 +25,7 @@ namespace MapChooser;
 public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
 {
     public override string ModuleName => "GG1_MapChooser";
-    public override string ModuleVersion => "v1.2.7";
+    public override string ModuleVersion => "v1.2.8";
     public override string ModuleAuthor => "Sergey";
     public override string ModuleDescription => "Map chooser, voting, rtv, nominate, etc.";
     public MCCoreAPI MCCoreAPI { get; set; } = null!;
@@ -349,6 +349,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     }
     public HookResult EventRoundStartHandler(EventRoundStart @event, GameEventInfo info)
     {
+        roundsManager.UpdateMaxRoundsValue();
         Restart = false;
         MapIsChanging = false;
         if (canVote)
@@ -2348,16 +2349,7 @@ public class MaxRoundsManager
     public bool WarmupRunning => Plugin.GameRules?.WarmupPeriod ?? false;
     public void InitialiseMap()
     {
-        var CvarMaxRounds = ConVar.Find("mp_maxrounds");
-        if (CvarMaxRounds != null)
-        {    
-            MaxRoundsValue = CvarMaxRounds.GetPrimitiveValue<int>();
-            Plugin.Logger.LogInformation($"On Initialise Map set: MaxRoundsValue {MaxRoundsValue}");
-        }
-        else
-        {
-            Plugin.Logger.LogInformation($"On Initialise Map cant set: MaxRoundsValue because CvarMaxRounds is null");
-        }
+        UpdateMaxRoundsValue();
 
         var CvarCanClinch = ConVar.Find("mp_match_can_clinch");
         if (CvarCanClinch != null)
@@ -2371,6 +2363,19 @@ public class MaxRoundsManager
         }
         ClearRounds();
         MaxRoundsVoted = false;
+    }
+    public void UpdateMaxRoundsValue()
+    {
+        var CvarMaxRounds = ConVar.Find("mp_maxrounds");
+        if (CvarMaxRounds != null)
+        {    
+            MaxRoundsValue = CvarMaxRounds.GetPrimitiveValue<int>();
+            Plugin.Logger.LogInformation($"On UpdateMaxRoundsValue set: MaxRoundsValue {MaxRoundsValue}");
+        }
+        else
+        {
+            Plugin.Logger.LogInformation($"On UpdateMaxRoundsValue cant set: MaxRoundsValue because CvarMaxRounds is null");
+        }
     }
     public int RemainingRounds
     {
