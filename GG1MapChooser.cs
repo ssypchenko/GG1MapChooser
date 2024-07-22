@@ -25,7 +25,7 @@ namespace MapChooser;
 public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
 {
     public override string ModuleName => "GG1_MapChooser";
-    public override string ModuleVersion => "v1.2.8";
+    public override string ModuleVersion => "v1.2.9";
     public override string ModuleAuthor => "Sergey";
     public override string ModuleDescription => "Map chooser, voting, rtv, nominate, etc.";
     public MCCoreAPI MCCoreAPI { get; set; } = null!;
@@ -349,11 +349,11 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     }
     public HookResult EventRoundStartHandler(EventRoundStart @event, GameEventInfo info)
     {
-        roundsManager.UpdateMaxRoundsValue();
         Restart = false;
         MapIsChanging = false;
         if (canVote)
         {
+            roundsManager.UpdateMaxRoundsValue();
             if (!roundsManager.WarmupRunning && roundsManager.CheckMaxRounds())
             {
                 Logger.LogInformation("Time to vote because of CheckMaxRounds");
