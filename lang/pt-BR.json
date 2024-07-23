@@ -41,5 +41,9 @@
   "ggmap.nomaps": "Nenhum mapa semelhante na lista. Adivinhe mais",
   "ggmap.change": "Mapa será alterado em 5 segundos.",
   "nextmap.info": " {green}Próximo mapa: {0}",
-  "nextmap.none": " {red}O próximo mapa ainda não está selecionado."
+  "nextmap.none": " {red}O próximo mapa ainda não está selecionado.",
+  "noactive.vote": " {red}Não é possível votar novamente porque não há votação ativa agora.",
+  "cant.revote": " {red}Não é possível votar novamente devido a um erro no menu.",
+  "norecorded.vote": " {red}Não é possível votar novamente porque não há registros do seu voto.",
+  "notvoted.yet": " {red}Can't vote again because you haven't voted yet."
 }

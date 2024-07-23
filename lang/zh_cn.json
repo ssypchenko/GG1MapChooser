@@ -41,5 +41,9 @@
   "ggmap.nomaps": "[系统] 未找到相似地图,请再想想.",
   "ggmap.change": "[系统] 将在5秒后更换地图.",
   "nextmap.info": "[系统] {green}下一张地图",
-  "nextmap.none": "[系统] {red}尚未选择下一张地图"
+  "nextmap.none": "[系统] {red}尚未选择下一张地图",
+  "noactive.vote": "[系统] {red}无法重新投票，因为目前没有有效投票.",
+  "cant.revote": "[系统] {red}由于菜单错误，无法重新投票.",
+  "norecorded.vote": "[系统] {red}无法重新投票，因为没有你的投票记录.",
+  "notvoted.yet": "[系统] {red}无法重新投票，因为您尚未投票."
 } 
