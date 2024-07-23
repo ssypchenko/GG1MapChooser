@@ -44,6 +44,5 @@
   "nextmap.none": " {red}Next map is not selected yet.",
   "noactive.vote": " {red}Can't re-vote because there is no active vote now.",
   "cant.revote": " {red}Can't re-vote because an error with menu.",
-  "norecorded.vote": " {red}Can't re-vote because no records of your vote.",
   "notvoted.yet": " {red}Can't re-vote because you haven't voted yet."
 } 
