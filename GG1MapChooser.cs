@@ -1298,7 +1298,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                 {
                     if (!votePlayers.ContainsKey(player.Slot) && option != null && option.OptionDisplay != null)
                     {
-                        votePlayers.Add(player.Slot, option.OptionDisplay);
+                        votePlayers.Add(player.Slot, "extend.map");
                         
                         if (!optionCounts.TryGetValue("extend.map", out int count))
                             optionCounts["extend.map"] = 1;
@@ -1317,7 +1317,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             {
                 GlobalChatMenu?.AddMenuOption(Localizer["extend.map"], (player, option) =>
                 {
-                    if (!votePlayers.ContainsKey(player.Slot))
+                    if (!votePlayers.ContainsKey(player.Slot) && option != null && option.Text != null)
                     {
                         votePlayers.Add(player.Slot, "extend.map");
                         
@@ -1362,9 +1362,9 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                 {
                     GlobalChatMenu?.AddMenuOption($"{mapsToVote[i]}", (player, option) =>
                     {
-                        if (!votePlayers.ContainsKey(player.Slot)) // if contains - means we have his vote already and skip this vote
+                        if (!votePlayers.ContainsKey(player.Slot) && option != null && option.Text != null) // if contains - means we have his vote already and skip this vote
                         {
-                            votePlayers.Add(player.Slot, "extend.map");
+                            votePlayers.Add(player.Slot, option.Text);
                             
                             if (!optionCounts.TryGetValue(option.Text, out int count))
                                 optionCounts[option.Text] = 1;
@@ -1528,38 +1528,37 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             Console.WriteLine("Invalid rtv caller");
             return;
         }
+
         if (!IsVoteInProgress)
         {
             caller.PrintToChat(Localizer["noactive.vote"]);
+            return;
         }
         if (votePlayers.TryGetValue(caller.Slot, out string? voteResult))
         {
             if (voteResult != null && optionCounts.TryGetValue(voteResult, out int count))
             {
                 optionCounts[voteResult] = count - 1;
-                if (GlobalChatMenu != null)
-                {
-                    MenuManager.OpenChatMenu(caller, GlobalChatMenu);
-                }
-                else if (GlobalWASDMenu != null)
-                {
-                    var manager = GetMenuManager();
-                    manager?.OpenMainMenu(caller, GlobalWASDMenu);
-                }
-                else
-                {
-                    Logger.LogError("Both GlobalWASDMenu and GlobalChatMenu are null but shouln't be");
-                    caller.PrintToChat(Localizer["cant.revote"]);
-                }
+                votePlayers.Remove(caller.Slot);
             }
             else
             {
-                caller.PrintToChat(Localizer["norecorded.vote"]);
+                Logger.LogError($"Should be recorded vote for {caller.PlayerName} but it is absent.");
             }
+        }
+        if (GlobalChatMenu != null)
+        {
+            MenuManager.OpenChatMenu(caller, GlobalChatMenu);
+        }
+        else if (GlobalWASDMenu != null)
+        {
+            var manager = GetMenuManager();
+            manager?.OpenMainMenu(caller, GlobalWASDMenu);
         }
         else
         {
-            caller.PrintToChat(Localizer["notvoted.yet"]);
+            Logger.LogError("Both GlobalWASDMenu and GlobalChatMenu are null but shouln't be");
+            caller.PrintToChat(Localizer["cant.revote"]);
         }
     }
 
@@ -2158,7 +2157,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         }
         IsVoteInProgress = true;
         MakeRTVTimer(Config.RTVInterval);
-        DoAutoMapVote(null!, Config.VotingTime, SSMC_ChangeMapTime.ChangeMapTime_Now );
+        DoAutoMapVote(null!, Config.VotingTime, SSMC_ChangeMapTime.ChangeMapTime_Now, Config.EndMapVoteWASDMenu );
     }
     private void CleanRTVArrays()
     {

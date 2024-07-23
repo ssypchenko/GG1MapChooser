@@ -37,6 +37,7 @@
     <li><code>RTVInterval</code> - Cooldown period after a failed vote.</li>
     <li><code>VotingTime</code> - Duration for players to cast their votes. Can be overridden in console commands.</li>
     <li><code>EndMapVoteWASDMenu</code> - End of Map Vote in WASD menu (navigation by buttons W (up), A (down), S (previous menu), D (select menu item), "Tab" to exit).</li>
+    <li><code>NominationsWASDMenu</code> - Nomination in WASD menu (true) (navigation by buttons W (up), A (down), S (previous menu), D (select menu item), "Tab" to exit) or in Chat Menu (false).</li>
     <li><code>MapsInVote</code> - Number of maps in the voting pool <em>(5 is the recommended value)</em>.</li>
     <li><code>ExtendMapInVote</code> - Set to true to add the "Extend Map" menu item. It increases the "mp_timelimit" variable.</li>
     <li><code>ExtendMapTimeMinutes</code> - Time in minutes to increase the "mp_timelimit" variable.</li>
@@ -60,6 +61,7 @@
 <ul>
     <li><strong>Voting:</strong> Players can initiate a map vote using <code>!rtv</code> or <code>rtv</code> in chat. The required percentage of votes to start a vote is controlled by the <code>VotesToWin</code> setting.</li>
     <li><strong>Nominating:</strong> Players can nominate a map by typing <code>!nominate &lt;mapname&gt;</code> or simply <code>nominate</code> to bring up a list of eligible maps based on current server conditions.</li>
+    <li><strong>Re-Vote:</strong> After the vote has been taken, or if the voting menu has been accidentally closed, players can revote using the "!revote" command in chat.</li>
 </ul>
 
 <h2>Setup Examples</h2>
