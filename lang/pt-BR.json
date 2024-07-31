@@ -2,12 +2,12 @@
   "mapchange.to": "O próximo mapa é {0}",
   "extend.map": "Estender mapa",
   "timetovote.left": "{0} segundos restantes para votar",
-  "nortv.time": "Não é possível iniciar o Rock the Vote por mais {0} segundos",
+  "nortv.time": " {red}Não é possível iniciar o Rock the Vote por mais {0} segundos",
   "already.rtv": "Você já votou para Rock the Vote. Mais {0} necessário(s)",
   "rtv.entered": "{0} quer iniciar o Rock the Vote",
   "rtv.info": "Digite 'rtv' para participar, ou 'nominate' para indicar um mapa.",
   "more.required": "{0} necessário(s) a mais",
-  "nortv.now": "Não é possível iniciar o Rock the Vote agora.",
+  "nortv.now": " {red}Não é possível iniciar o Rock the Vote agora.",
   "player.choice": "{0} votou em {1}",
   "randommap.selected": "Falha na votação, o mapa aleatório {0} foi selecionado",
   "nominated.enough": "Número máximo de mapas para votação já nomeados",
@@ -15,7 +15,7 @@
   "map.nominated": "{0} mapa indicado com sucesso",
   "voted.already": "Você já votou para o mapa.",
   "nominated.already": "Este mapa já está indicado",
-  "no.map": "Não há esse mapa no servidor: {0}",
+  "no.map": " {red}Não há esse mapa no servidor: {0}",
   "nomination.error": "Erro na indicação",
   "not.now": "Este mapa não pode ser indicado agora",
   "player.nominated": "{0} indicou {1}",
@@ -44,5 +44,7 @@
   "nextmap.none": " {red}O próximo mapa ainda não está selecionado.",
   "noactive.vote": " {red}Não é possível votar novamente porque não há votação ativa agora.",
   "cant.revote": " {red}Não é possível votar novamente devido a um erro no menu.",
-  "notvoted.yet": " {red}Can't vote again because you haven't voted yet."
+  "nortv.allowed": " {red}O comando RTV não é permitido.",
+  "nominate.notallowed": " {red}O comando de nomeação não é permitido.",
+  "set.nextmap": "Definir próximo mapa"
 }

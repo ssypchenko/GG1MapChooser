@@ -7,7 +7,7 @@
   "rtv.entered": "[系统] {green}{0}{default}想要rtv投票换图.",
   "rtv.info": "[系统] 输入{green}!rtv{default}加入投票, 或{green}!nominate{default}预定地图.",
   "more.required": "[系统] 还需{green}{0}{default}票",
-  "nortv.now": "[系统] 目前无法进行rtv换图.",
+  "nortv.now": "[系统] {red}目前无法进行rtv换图.",
   "player.choice": "[系统] {green}{0}{default}投票选择{green}{1}{default}",
   "randommap.selected": "[系统] 投票没通过,随机更换地图为{green}{0}{default}",
   "nominated.enough": "[系统] 已提名足够多的地图供投票",
@@ -15,7 +15,7 @@
   "map.nominated": "[系统] 成功预定地图.",
   "voted.already": "[系统] 你已经投过这张地图了.",
   "nominated.already": "[系统] 这张地图已经预定过了.",
-  "no.map": "[系统] 没有找到这张图:{green}{0}",
+  "no.map": "[系统] {red}没有找到这张图:{green}{0}",
   "nomination.error": "[系统] 预定出错.",
   "not.now": "[系统] 这张地图现在不能预定.",
   "player.nominated": "[系统] {green}{0}{default}预定了{green}{1}{default}.",
@@ -44,5 +44,7 @@
   "nextmap.none": "[系统] {red}尚未选择下一张地图",
   "noactive.vote": "[系统] {red}无法重新投票，因为目前没有有效投票.",
   "cant.revote": "[系统] {red}由于菜单错误，无法重新投票.",
-  "notvoted.yet": "[系统] {red}无法重新投票，因为您尚未投票."
+  "nortv.allowed": "[系统] {red}不允许 RTV 命令.",
+  "nominate.notallowed": "[系统] {red}不允许提名命令.",
+  "set.nextmap": "设置下一张地图"
 } 
