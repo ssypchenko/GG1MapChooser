@@ -25,7 +25,7 @@ namespace MapChooser;
 public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
 {
     public override string ModuleName => "GG1_MapChooser";
-    public override string ModuleVersion => "v1.3.1";
+    public override string ModuleVersion => "v1.4.0";
     public override string ModuleAuthor => "Sergey";
     public override string ModuleDescription => "Map chooser, voting, rtv, nominate, etc.";
     public MCCoreAPI MCCoreAPI { get; set; } = null!;
@@ -1095,7 +1095,8 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                         optionCounts["Yes"] = 1;
                     else
                         optionCounts["Yes"] = count + 1;
-                    Server.PrintToChatAll(Localizer["player.voteforchange", player.PlayerName]);
+                    if (Config.PrintPlayersChoiceInChat)
+                        Server.PrintToChatAll(Localizer["player.voteforchange", player.PlayerName]);
                 }
             });
             GlobalChatMenu.AddMenuOption(Localizer["vote.no"], (player, option) =>
@@ -1107,7 +1108,8 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                         optionCounts["No"] = 1;
                     else
                         optionCounts["No"] = count + 1;
-                    Server.PrintToChatAll(Localizer["player.voteagainstchange", player.PlayerName, option.Text]);
+                    if (Config.PrintPlayersChoiceInChat)
+                        Server.PrintToChatAll(Localizer["player.voteagainstchange", player.PlayerName, option.Text]);
                 }
             });
 //            ChangeOrNotMenu.PostSelectAction = PostSelectAction.Close;
@@ -1825,7 +1827,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             }
         }
     }
-    [ConsoleCommand("ggmc_reload_maps", "Reload maps")]
+    [ConsoleCommand("reloadmaps", "Reload maps")]
 	[RequiresPermissions("@css/changemap")]
     public void ReloadMapsCommand(CCSPlayerController caller, CommandInfo command)
     {
