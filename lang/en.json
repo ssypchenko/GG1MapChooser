@@ -1,6 +1,7 @@
 {
   "mapchange.to": "The next map is {0}",
   "extend.map": "Extend Map",
+  "extend.win": "Winner - Extend Map",
   "timetovote.left": "{0} seconds left to Vote",
   "nortv.time": " {red}Cannot Rock the Vote for {0} more seconds",
   "already.rtv": "You have already entered Rock the Vote. {0} more required",
