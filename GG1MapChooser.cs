@@ -29,7 +29,7 @@ namespace MapChooser;
 public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
 {
     public override string ModuleName => "GG1_MapChooser";
-    public override string ModuleVersion => "v1.4.0";
+    public override string ModuleVersion => "v1.4.2";
     public override string ModuleAuthor => "Sergey";
     public override string ModuleDescription => "Map chooser, voting, rtv, nominate, etc.";
     public MCCoreAPI MCCoreAPI { get; set; } = null!;
@@ -1644,6 +1644,11 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         {
             if (Config.AllowNominate)
             {
+                if (_roundEndMap != null && _roundEndMap.Length > 0)
+                {
+                    player.PrintToChat(Localizer["no.nomination"]);
+                    return;
+                }
                 if (nominatedMaps.Count < Config.MapsInVote)
                 {
                     string[] words = command.Split(' ', StringSplitOptions.RemoveEmptyEntries);
@@ -1689,6 +1694,11 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             if (rtv_can_start > 0) //Работает таймер задержки
             {
                 caller.PrintToChat(Localizer["nortv.time", rtv_can_start]);
+                return;
+            }
+            if (_roundEndMap != null && _roundEndMap.Length > 0)
+            {
+                caller.PrintToChat(Localizer["nortv.now"]);
                 return;
             }
             if (players[caller.Slot] != null)
@@ -2301,6 +2311,8 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         rtvRestartProblems = 0;
         roundsManager.InitialiseMap();
         MapIsChanging = false;
+        GlobalChatMenu = null;
+        GlobalWASDMenu = null;
     }
     private static bool IsValidPlayer (CCSPlayerController? p)
     {
@@ -2405,6 +2417,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             double percent_now = (double)rtvs / total;
             
             rtv_need_more = (int)Math.Ceiling((Config.VotesToWin - percent_now) * total);
+            Logger.LogInformation($"rtv %: {percent_now}, {rtvs} out of {total}, {rtv_need_more} need more");
             if ((total == 1 && rtvs == 1) || rtv_need_more <= 0)
             {
                 return true;
