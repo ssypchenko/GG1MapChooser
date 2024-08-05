@@ -85,16 +85,21 @@
                 <ul><li>"ChangeMapAfterWinDraw": true,</li>
                 <li>"ChangeMapAfterVote": false,</li>
                 <li>"VoteDependsOnRoundWins": true.</li></ul>
+            </li>
             <li>In the "TriggerRoundsBeforeEnd" parameter, specify the number of rounds before the end of the game to trigger the vote (set this value greater than 0).</li>
             <li> Use "TriggerRoundsBeforEndVoteAtRoundStart": true to start the vote at the beginning of the specified round or false to start the vote at the end of that round.</li>
             <li>Triggering the Vote:<br>
                 <ul><li>If "TriggerRoundsBeforeEnd" is set to 1:<br>
                     <ul><li>The vote will be triggered at the beginning of the last round.</li>
-                    <li>If "TriggerRoundsBeforEndVoteAtRoundStart" is set to false, the vote will start at the end of the last round, right when you see the winners and the standard voting interface appears on the screen.</li>
-                </ul></li>
+                        <li>If "TriggerRoundsBeforEndVoteAtRoundStart" is set to false, the vote will start at the end of the last round, right when you see the winners and the standard voting interface appears on the screen.</li>
+                    </ul>
+                    </li>
+                </ul>
+            </li>
             <li>Handling Early Round Endings:<br>
                 <ul><li>Even if the vote is triggered at the start of the last round, the round may end before the vote finishes.</li>
-                <li>To accommodate this, and if your vote is scheduled for the very end of the game, set the mp_endmatch_votenextleveltime cvar to a duration long enough to allow the plugin to complete the vote (VotingTime) and change the map (add an extra 5 seconds).</li></ul>
+                <li>To accommodate this, and if your vote is scheduled for the very end of the game, set the mp_endmatch_votenextleveltime cvar to a duration long enough to allow the plugin to complete the vote (VotingTime) and change the map (add an extra 5 seconds).</li>
+                </ul>
             </li>
             <li>Note on Post-Game Voting:<br>
                 <ul><li>Be aware that once the game finishes, the WASD menu will not be shown, and votes via chat may not be allowed.</li></ul>
