@@ -199,7 +199,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             {
                 if (players[slot].HasProposedMaps())
                     nominatedMaps.Remove(players[slot].ProposedMaps);
-                if (IsRTVThreshold())  // если достаточно голосов - запускаем голосование
+                if (Config.AllowRTV && IsRTVThreshold(false))  // если достаточно голосов - запускаем голосование
                 {
                     StartRTV();
                     return;
@@ -228,8 +228,10 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             mapChangedOnStart = true;
             timeManager.EnqueueOperation(async () => 
             {
-                await KillTimer(changeRequested);
-                changeRequested = null;
+                if (await KillTimer(changeRequested))
+                {
+                    changeRequested = null;
+                }
             });      
         }
         else
@@ -342,30 +344,6 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         _timeLimitMapChangeTimer = null;
         rtvTimer = null;
     }
-    private void KillAllTimers()
-    {
-        timeManager.EnqueueOperation(async () => 
-        {
-            await KillTimer(changeRequested);
-            changeRequested = null;
-        });   
-        timeManager.EnqueueOperation(async () => 
-        {
-            await KillTimer(_timeLimitTimer);
-            _timeLimitTimer = null;
-        });
-        timeManager.EnqueueOperation(async () => 
-        {
-            await KillTimer(_timeLimitMapChangeTimer);
-            _timeLimitMapChangeTimer = null;
-        });
-        timeManager.EnqueueOperation(async () => 
-        {
-            await KillTimer(rtvTimer);
-            rtvTimer = null;
-            Logger.LogInformation("RTV timer killed in KillAllTimers");
-        });
-    }
     public HookResult EventRoundAnnounceWarmupHandler(EventRoundAnnounceWarmup @event, GameEventInfo info)
     {
         if (@event is null)
@@ -402,9 +380,16 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             {
                 Logger.LogInformation("Time to vote because of CheckMaxRounds");
                 if (Config.TriggerRoundsBeforEndVoteAtRoundStart)
+                {
+                    
+                    Logger.LogInformation("Vote started");
                     StartVote();
+                }
                 else
+                {
                     _runVoteRoundEnd = true; //StartVote will be called at round end
+                    Logger.LogInformation("Vote will be started at the Round End");
+                }
             }
             else
             {
@@ -432,6 +417,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         roundsManager.LastBeforeHalf = false;
         if (_runVoteRoundEnd)
         {
+            Logger.LogInformation("Vote started at the Round End");
             _runVoteRoundEnd = false;
             StartVote();
         }
@@ -463,10 +449,30 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             }
             else
             {
-                Logger.LogError("Can't change map after Win/Draw because _roundEndMap is null");
+                if (IsVoteInProgress)
+                {
+                    Logger.LogError("Can't change map after Win/Draw because vote still in Progress");
+                    AddTimer(1.0f, Handle_VoteEndTimer, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE);
+                }
+                else
+                    Logger.LogError("Can't change map after Win/Draw because _roundEndMap is null");
             }
         }
         return HookResult.Continue;
+    }
+    private void Handle_VoteEndTimer()
+    { 
+        if (!IsVoteInProgress)
+        {
+            if (!string.IsNullOrEmpty(_roundEndMap))
+            {
+                DoMapChange(_roundEndMap, SSMC_ChangeMapTime.ChangeMapTime_Now);
+            }
+            else
+            {
+                Logger.LogWarning("Handle_VoteEndTimer: _roundEndMap is null, so don't change");
+            }
+        }
     }
     private void Timer_ChangeMapOnEmpty()
     {   
@@ -501,8 +507,10 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             Logger.LogError("_timeLimitMapChangeTimer not null but should be");
             timeManager.EnqueueOperation(async () => 
             {
-                await KillTimer(_timeLimitMapChangeTimer);
-                _timeLimitMapChangeTimer = null;
+                if (await KillTimer(_timeLimitMapChangeTimer))
+                {
+                    _timeLimitMapChangeTimer = null;
+                }
             });
         }
         if (canVote)
@@ -770,8 +778,10 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                     {
                         timeManager.EnqueueOperation(async () => 
                         {
-                            await KillTimer(_timeLimitMapChangeTimer);
-                            _timeLimitMapChangeTimer = null;
+                            if (await KillTimer(_timeLimitMapChangeTimer))
+                            {
+                                _timeLimitMapChangeTimer = null;
+                            }
 //                            Logger.LogInformation("Kill timeLimitMapChangeTimer because timeLimit timer restarted.");
                         });
                     }
@@ -2097,8 +2107,10 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         }
         timeManager.EnqueueOperation(async () => 
         {
-            await KillTimer(voteTimer);
-            voteTimer = null;
+            if (await KillTimer(voteTimer))
+            {
+                voteTimer = null;
+            }
         });
     }
     private void TryNominate(CCSPlayerController player, string map)
@@ -2372,19 +2384,22 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         if (canVote) canRtv = true;
         timeManager.EnqueueOperation(async () => 
         {
-            await KillTimer(rtvTimer);
-            rtvTimer = null;
-            Logger.LogInformation("RTV timer killed in Handle_RTVTimer");
-            
+            if (await KillTimer(rtvTimer))
+            {
+                rtvTimer = null;
+                Logger.LogInformation("RTV timer killed in Handle_RTVTimer");
+            }
         });
         timeManager.EnqueueOperation(async () => 
         {
-            await KillTimer(voteTimer);
-            voteTimer = null;
+            if (await KillTimer(voteTimer))
+            {
+                voteTimer = null;
+            }
         });
         return;
     }
-    private bool IsRTVThreshold()
+    private bool IsRTVThreshold(bool log = true)
     {
         int total = 0;
         int rtvs = 0;
@@ -2417,11 +2432,18 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             double percent_now = (double)rtvs / total;
             
             rtv_need_more = (int)Math.Ceiling((Config.VotesToWin - percent_now) * total);
-            Logger.LogInformation($"rtv %: {percent_now}, {rtvs} out of {total}, {rtv_need_more} need more");
+            
+            
             if ((total == 1 && rtvs == 1) || rtv_need_more <= 0)
             {
+                Logger.LogInformation($"Successful rtv %: {percent_now}, {rtvs} out of {total}");
                 return true;
-            }  
+            } 
+            else
+            {
+                if (log)
+                    Logger.LogInformation($"Not enough for rtv: % - {percent_now}, {rtvs} out of {total}, {rtv_need_more} need more");
+            }
         }
         return false;
     }
@@ -2616,8 +2638,10 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         {
             timeManager.EnqueueOperation(async () => 
             {
-                await KillTimer(_timeLimitTimer);
-                _timeLimitTimer = null;
+                if (await KillTimer(_timeLimitTimer))
+                {
+                    _timeLimitTimer = null;
+                }
             });
             Logger.LogInformation("TimeLimit timer cancelled and killed");
         }
@@ -2627,22 +2651,25 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         }
         Logger.LogInformation($"TimeLimit timer started for {(int)duration}.");
     }
-    public async Task KillTimer (Timer? timerToKill)
+    public async Task<bool> KillTimer(Timer? timerToKill)
     {
         if (timerToKill != null)
         {
-            await Task.Run(() =>
+            return await Task.Run(() =>
             {
                 try
                 {
-                    Server.NextFrame( () => timerToKill.Kill() );
+                    Server.NextFrame(() => timerToKill.Kill());
+                    return true; // Timer was killed successfully
                 }
                 catch (Exception ex)
                 {
-                    Server.NextFrame( () => {Logger.LogError($"Failed to kill the timer: {ex.Message}");});
+                    Server.NextFrame(() => { Logger.LogError($"Failed to kill the timer: {ex.Message}"); });
+                    return false; // Timer killing failed
                 }
             });
         }
+        return false; // Timer was null
     }
     public enum Nominations
     {
