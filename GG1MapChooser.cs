@@ -29,7 +29,7 @@ namespace MapChooser;
 public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
 {
     public override string ModuleName => "GG1_MapChooser";
-    public override string ModuleVersion => "v1.4.3";
+    public override string ModuleVersion => "v1.4.4";
     public override string ModuleAuthor => "Sergey";
     public override string ModuleDescription => "Map chooser, voting, rtv, nominate, etc.";
     public MCCoreAPI MCCoreAPI { get; set; } = null!;
@@ -1758,19 +1758,37 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     }
 
     [ConsoleCommand("setnextmap", "Set Next Map")]
-    [CommandHelper(whoCanExecute: CommandUsage.CLIENT_ONLY)]
     [RequiresPermissions("@css/changemap")]
     public void SetNextMapCommand(CCSPlayerController caller, CommandInfo command)
     {
-        if (IsValidPlayer(caller))
+        if (!string.IsNullOrEmpty(command.ArgString))
         {
-            if (!string.IsNullOrEmpty(command.ArgString))
+            string playerName = "";
+            if (IsValidPlayer(caller))
             {
-                if (Maps_from_List.ContainsKey(command.ArgString))
+                playerName = caller.PlayerName;
+            }
+            if (string.IsNullOrEmpty(playerName))
+            {
+                Logger.LogInformation($"set next map requested for {command.ArgString}");
+            }
+            else
+            {
+                Logger.LogInformation($"{playerName} requested to set next map: {command.ArgString}");
+            }
+            if (Maps_from_List.ContainsKey(command.ArgString))
+            {
+                DoMapChange(command.ArgString, SSMC_ChangeMapTime.ChangeMapTime_MapEnd);
+                Logger.LogInformation($"Next map set: {command.ArgString}");
+                if (!string.IsNullOrEmpty(playerName))
                 {
-                    DoMapChange(command.ArgString, SSMC_ChangeMapTime.ChangeMapTime_MapEnd);
+                    PrintToPlayerChat(caller, "nextmap.info", command.ArgString);
                 }
-                else
+            }
+            else
+            {
+                Logger.LogInformation($"{command.ArgString} is not in the map list");
+                if (!string.IsNullOrEmpty(playerName))
                 {
                     PrintToPlayerChat(caller, "no.map", command.ArgString);
                 }
@@ -2235,19 +2253,22 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             {
                 await KillTimer(voteEndChange);
 
-                voteEndChange = AddTimer(Config.DelayBeforeChangeSeconds, () =>
+                Server.NextFrame(() => 
                 {
-                    voteEndChange = null;
-                    if (_roundEndMap != null && _roundEndMap != "extend.map")
+                    voteEndChange = AddTimer(Config.DelayBeforeChangeSeconds, () =>
                     {
-                        Logger.LogInformation($"TimerVoteMap: ChangeMapInFive - {_roundEndMap}");
-                        ChangeMapInFive(_roundEndMap);
-                    }
-                    else
-                    {
-                        Logger.LogInformation($"TimerVoteMap: Can't call ChangeMapInFive");
-                    }
-                }, TimerFlags.STOP_ON_MAPCHANGE);
+                        voteEndChange = null;
+                        if (_roundEndMap != null && _roundEndMap != "extend.map")
+                        {
+                            Logger.LogInformation($"TimerVoteMap: ChangeMapInFive - {_roundEndMap}");
+                            ChangeMapInFive(_roundEndMap);
+                        }
+                        else
+                        {
+                            Logger.LogInformation($"TimerVoteMap: Can't call ChangeMapInFive");
+                        }
+                    }, TimerFlags.STOP_ON_MAPCHANGE);
+                });
             });
         }
         if (mapsToVote.Count > 0)
