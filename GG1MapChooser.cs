@@ -29,7 +29,7 @@ namespace MapChooser;
 public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
 {
     public override string ModuleName => "GG1_MapChooser";
-    public override string ModuleVersion => "v1.4.4";
+    public override string ModuleVersion => "v1.4.5";
     public override string ModuleAuthor => "Sergey";
     public override string ModuleDescription => "Map chooser, voting, rtv, nominate, etc.";
     public MCCoreAPI MCCoreAPI { get; set; } = null!;
@@ -54,10 +54,10 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         }
         if (Config.ChangeMapAfterWinDraw && Config.ChangeMapAfterVote)
         {
-            Logger.LogError("ChangeMapAfterWinDraw may not work because ChangeMapAfterVote set true");
+            Logger.LogWarning("ChangeMapAfterWinDraw may not work because ChangeMapAfterVote set true");
         }
         roundsManager.InitialiseMap();
-        roundsManager.CheckConfig();
+//        roundsManager.CheckConfig();
         if (Config.VoteDependsOnTimeLimit)
         {
             var TimeLimit = ConVar.Find("mp_timelimit");
@@ -117,10 +117,10 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     private List<string> _playedMaps = new List<string>();
     public string MapToChange = ""; 
     public bool MapIsChanging = false;
-    public CCSGameRules GameRules = null!;
+//    public CCSGameRules GameRules = null!;
     public static IWasdMenuManager? WMenuManager;
     private readonly object _timerLock = new object();
-    public override void Load(bool hotReload)
+    public override void Load(bool hotReload) 
     {
         Logger.LogInformation($"{ModuleVersion}");
         MCCoreAPI = new MCCoreAPI(this);
@@ -157,8 +157,9 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         
         RegisterListener<Listeners.OnMapStart>(OnMapStart);
         RegisterListener<Listeners.OnMapEnd>(OnMapEnd);
+        RegisterListener<Listeners.OnClientPutInServer>(OnClientPutInServer);
         RegisterListener<Listeners.OnClientAuthorized>(OnClientAuthorized);
-        RegisterListener<Listeners.OnClientDisconnect>(OnClientDisconnect);
+        RegisterListener<Listeners.OnClientDisconnectPost>(OnClientDisconnect);
                 
         if (hotReload)
         {
@@ -166,22 +167,26 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             var playerEntities = Utilities.GetPlayers().Where(p => IsValidPlayer(p));
             if (playerEntities != null && playerEntities.Any())
             {
-                foreach (var playerController in playerEntities)
+                foreach (var pl in playerEntities)
                 {
-                    if (players[playerController.Slot] != null)
-                        players[playerController.Slot] = null!;
-                    players[playerController.Slot] = new Player ();
+                    if (players[pl.Slot] != null)
+                        players[pl.Slot] = null!;
+                    players[pl.Slot] = new Player
+                    {
+                        putInServer = true
+                    };
                 }
             }
         }
-        AddTimer(2.0f, () => {
+/*        AddTimer(2.0f, () => {
             GameRules = GetGameRules();
-        }, TimerFlags.STOP_ON_MAPCHANGE);
+        }, TimerFlags.STOP_ON_MAPCHANGE); */
     }
     public override void Unload(bool hotReload)
     {
-        RemoveListener<Listeners.OnClientDisconnect>(OnClientDisconnect);
+        RemoveListener<Listeners.OnClientDisconnectPost>(OnClientDisconnect);
         RemoveListener<Listeners.OnClientAuthorized>(OnClientAuthorized);
+        RemoveListener<Listeners.OnClientPutInServer>(OnClientPutInServer);
         RemoveListener<Listeners.OnMapStart>(OnMapStart);
         RemoveListener<Listeners.OnMapEnd>(OnMapEnd);
         DeregisterEventHandler<EventRoundStart>(EventRoundStartHandler);
@@ -197,26 +202,65 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         {
             if (players[slot] != null)
             {
-                if (players[slot].HasProposedMaps())
-                    nominatedMaps.Remove(players[slot].ProposedMaps);
-                if (Config.AllowRTV && IsRTVThreshold(false))  // если достаточно голосов - запускаем голосование
+                if (players[slot].putInServer)
                 {
-                    StartRTV();
-                    return;
-                }       
-                players[slot] = null!;
-            } 
+                    var playerEntities = Utilities.GetPlayers().Where(p => IsValidPlayer(p));
+                    if (playerEntities != null && playerEntities.Any())
+                    {
+//                        Logger.LogInformation($"player {slot} disconnected, but more players on Server");
+                        if (players[slot].HasProposedMaps())
+                        {
+                            nominatedMaps.Remove(players[slot].ProposedMaps);
+                        }
+                        if (Config.AllowRTV && IsRTVThreshold(false))  // если достаточно голосов - запускаем голосование
+                        {
+                            Logger.LogInformation($"Start rtv because of disconnected player and rtv threshold");
+                            StartRTV();
+                        }
+                    }
+                    else
+                    {   
+//                        Logger.LogInformation($"player {slot} disconnected, no more players on Server");
+                        ResetData("On last client disconnect");
 
-            var playerEntities = Utilities.GetPlayers().Where(p => IsValidPlayer(p));
-            if (playerEntities == null || !playerEntities.Any())
-            {
-                ResetData("On last client disconnect");
-                if (Config.LastDisconnectedChangeMap && changeRequested == null && !Restart)
-                {
-                    Logger.LogInformation($"Requested map change on last disconnected player");
-                    changeRequested = AddTimer(60.0f, Timer_ChangeMapOnEmpty, TimerFlags.STOP_ON_MAPCHANGE);
+                        if (Config.LastDisconnectedChangeMap && changeRequested == null && !Restart)
+                        {
+                            Logger.LogInformation($"Requested map change on last disconnected player");
+                            changeRequested = AddTimer(60.0f, Timer_ChangeMapOnEmpty, TimerFlags.STOP_ON_MAPCHANGE);
+                        }
+                        /*else
+                        {
+                            Logger.LogInformation($"{(changeRequested != null ? "changeRequested" : "changeRequested")} and {(Restart ? "Resrart" : "not Restart")}");
+                        } */
+                    }
                 }
+/*                else
+                {
+                    Logger.LogInformation($"player {slot} disconnected, but not with PutInServer");
+                } */
+                players[slot] = null!;
             }
+/*            else
+            {
+                Logger.LogInformation($"player {slot} disconnected, but not registered in players");
+            } */
+        }
+    }
+    private void OnClientPutInServer(int slot)
+    {
+        var p = Utilities.GetPlayerFromSlot(slot);
+        if (p != null && p.IsValid && slot < 65 && !p.IsBot && !p.IsHLTV)
+        {
+            if (players[slot] == null)
+            {
+                players[slot] = new Player ();
+//                Logger.LogInformation($"Player slot {slot} PutInServer");
+            }
+            else
+            {
+//                Logger.LogInformation($"Player slot {slot} already registered on PutInServer");
+            }
+            players[slot].putInServer = true;
         }
     }
     private void OnClientAuthorized(int slot, SteamID id)
@@ -224,7 +268,11 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         var p = Utilities.GetPlayerFromSlot(slot);
         if (p != null && p.IsValid && slot < 65 && !p.IsBot && !p.IsHLTV)
         {
-            players[slot] = new Player ();
+            if (players[slot] == null)
+            {
+                players[slot] = new Player ();
+//                Logger.LogInformation($"Player slot {slot} Authorised");
+            }
             mapChangedOnStart = true;
             timeManager.EnqueueOperation(async () => 
             {
@@ -234,10 +282,10 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                 }
             });      
         }
-        else
+/*        else
         {
             Logger.LogInformation($"Don't create Player() for slot {slot}");
-        }
+        } */
     }
     private void OnMapStart(string name)
     {
@@ -324,10 +372,10 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                     StartOrRestartTimeLimitTimer(timerTime, TimeLimitTimerHandle);
                 }
             }
-            AddTimer(3.5f, () => {
+            /*AddTimer(3.5f, () => {
                 GameRules = null!;
                 GameRules = GetGameRules();
-            }, TimerFlags.STOP_ON_MAPCHANGE);
+            }, TimerFlags.STOP_ON_MAPCHANGE); */
         }
         else
         {
@@ -376,7 +424,8 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         if (canVote)
         {
             roundsManager.UpdateMaxRoundsValue();
-            if (!roundsManager.WarmupRunning && roundsManager.CheckMaxRounds() && !_runVoteRoundEnd)
+            roundsManager.CheckConfig();
+            if (!IsVoteInProgress && !roundsManager.WarmupRunning && roundsManager.CheckMaxRounds() && !_runVoteRoundEnd)
             {
                 Logger.LogInformation("Time to vote because of CheckMaxRounds");
                 if (Config.TriggerRoundsBeforEndVoteAtRoundStart)
@@ -435,6 +484,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                     delay = 1.0f;
                 Logger.LogInformation($"EventCsWinPanelMatch: plugin is responsible for map change, delay for {delay} seconds before the change of map.");
                 
+                // ********************** maybe add check if the timer started...
                 AddTimer(delay, () =>
                 {
                     if (!string.IsNullOrEmpty(mapNameToChange))
@@ -799,6 +849,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     }
     private void ChangeMapInFive(string mapname)
     {
+        Logger.LogInformation($"Map will be changed in 5 seconds");
         AddTimer (5.0f, () => {
             if (Maps_from_List.TryGetValue(mapname, out var mapInfo))
             {
@@ -1399,7 +1450,8 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             //  create map list to chose
                 foreach (var mapcheck in Maps_from_List)
                 {
-                    if ((mapcheck.Value.MinPlayers != 0 && numplayers < mapcheck.Value.MinPlayers) || (mapcheck.Value.MaxPlayers != 0 && numplayers > mapcheck.Value.MaxPlayers) || _playedMaps.Contains(mapcheck.Key.ToLower()))
+                    if ((mapcheck.Value.MinPlayers != 0 && numplayers < mapcheck.Value.MinPlayers) || (mapcheck.Value.MaxPlayers != 0 && numplayers > mapcheck.Value.MaxPlayers) 
+                        || _playedMaps.Contains(mapcheck.Key.ToLower()) || (mapsToVote.Count > 0 && mapsToVote.Contains(GetDisplayName(mapcheck.Key))))
                     {
                         continue; //  map does not suite
                     }
@@ -1847,7 +1899,14 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         {
             if (_roundEndMap != null && _roundEndMap.Length > 0)
             {
-                PrintToPlayerChat(caller, "nextmap.info", _roundEndMap);
+                if (Config.PrintNextMapForAll)
+                {
+                    PrintToServerChat("nextmap.info", _roundEndMap);
+                }
+                else
+                {
+                    PrintToPlayerChat(caller, "nextmap.info", _roundEndMap);
+                }
             }
             else
             {
@@ -2248,7 +2307,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         GlobalWASDMenu = null;
         if (Config.ChangeMapAfterVote)
         {
-            Logger.LogInformation($"Change map after vote in {Config.DelayBeforeChangeSeconds}");
+            Logger.LogInformation($"Vote has been done. Start change map timer after the vote in {Config.DelayBeforeChangeSeconds}");
             timeManager.EnqueueOperation(async () => 
             {
                 await KillTimer(voteEndChange);
@@ -2258,7 +2317,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                     voteEndChange = AddTimer(Config.DelayBeforeChangeSeconds, () =>
                     {
                         voteEndChange = null;
-                        if (_roundEndMap != null && _roundEndMap != "extend.map")
+                        if (!string.IsNullOrEmpty(_roundEndMap) && _roundEndMap != "extend.map")
                         {
                             Logger.LogInformation($"TimerVoteMap: ChangeMapInFive - {_roundEndMap}");
                             ChangeMapInFive(_roundEndMap);
@@ -2629,10 +2688,10 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         }
         return searchString;
     }
-    private static CCSGameRules GetGameRules()
+/*    private static CCSGameRules GetGameRules()
     {
         return CounterStrikeSharp.API.Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").First().GameRules!;
-    }
+    } */
     public IWasdMenuManager? GetMenuManager()
     {
         if (WMenuManager == null)
@@ -2655,19 +2714,19 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     }
     private void StartOrRestartTimeLimitTimer(float duration, Action callback)
     {
-        if (_timeLimitTimer != null)
-        {
-            timeManager.EnqueueOperation(async () => 
-            {
-                if (await KillTimer(_timeLimitTimer))
-                {
-                    _timeLimitTimer = null;
-                }
-            });
-            Logger.LogInformation("TimeLimit timer cancelled and killed");
-        }
         lock (_timerLock)
         {
+            if (_timeLimitTimer != null)
+            {
+                timeManager.EnqueueOperation(async () => 
+                {
+                    if (await KillTimer(_timeLimitTimer))
+                    {
+                        _timeLimitTimer = null;
+                    }
+                });
+                Logger.LogInformation("TimeLimit timer cancelled and killed");
+            }
             _timeLimitTimer = AddTimer(duration, callback, TimerFlags.STOP_ON_MAPCHANGE);
         }
         Logger.LogInformation($"TimeLimit timer started for {(int)duration}.");
@@ -2753,6 +2812,9 @@ public class MCConfig : BasePluginConfig
     /* Print Player's choice to other players in Chat.  */
     [JsonPropertyName("PrintPlayersChoiceInChat")]
     public bool PrintPlayersChoiceInChat { get; set; } = true;
+    /* Print NextMap command result for all players.  */
+    [JsonPropertyName("PrintNextMapForAll")]
+    public bool PrintNextMapForAll { get; set; } = false;
 
     /* Plugin will Change to Map voted before, after the win or draw event */
     [JsonPropertyName("ChangeMapAfterWinDraw")]
@@ -2839,7 +2901,9 @@ public class Player
         VotedRtv = false;
         SeenRtv = false;
         selectedMaps = [];
+        putInServer = false;
     }
+    public bool putInServer { get; set; } = false;
     public string ProposedMaps { get; set; } = "";
     public bool VotedRtv { get; set; } = false;
     public bool SeenRtv { get; set; } = false;
@@ -2865,7 +2929,14 @@ public class MaxRoundsManager
     public bool CanClinch;
     public bool UnlimitedRounds => MaxRoundsValue <= 0;
     public bool LastBeforeHalf = false;
-    public bool WarmupRunning => Plugin.GameRules?.WarmupPeriod ?? false;
+    public bool WarmupRunning
+    {
+        get
+        {
+            var GameRules = GetGameRules();
+            return GameRules?.WarmupPeriod ?? false;
+        }
+    }
     public void InitialiseMap()
     {
         UpdateMaxRoundsValue();
@@ -2874,7 +2945,7 @@ public class MaxRoundsManager
         if (CvarCanClinch != null)
         {
             CanClinch = CvarCanClinch.GetPrimitiveValue<bool>();
-            Plugin.Logger.LogInformation($"On Initialise Map set: CanClinch {(CanClinch ? "true" : "false")}");
+//            Plugin.Logger.LogInformation($"On Initialise Map set: CanClinch {(CanClinch ? "true" : "false")}");
         }
         else
         {
@@ -2900,7 +2971,8 @@ public class MaxRoundsManager
     {
         get
         {
-            var played = MaxRoundsValue - (Plugin.GameRules != null ? Plugin.GameRules.TotalRoundsPlayed : 0);
+            var GameRules = GetGameRules();
+            var played = MaxRoundsValue - (GameRules != null ? GameRules.TotalRoundsPlayed : 0);
             if (played < 0)
                 return 0;
             return played;
@@ -2964,6 +3036,10 @@ public class MaxRoundsManager
             return true;
 
         return CanClinch && (RemainingWins <= Plugin.Config.TriggerRoundsBeforEnd);
+    }
+    private static CCSGameRules GetGameRules()
+    {
+        return CounterStrikeSharp.API.Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").First().GameRules!;
     }
     public void CheckConfig()
     {
