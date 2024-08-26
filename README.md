@@ -47,6 +47,7 @@
     <li><code>ExtendMapTimeMinutes</code> - Time in minutes to increase the "mp_timelimit" variable.</li>
     <li><code>VotesToWin</code> - Percentage of votes needed to win the vote <em>(0.6 (60%) is the recommended value)</em>.</li>
     <li><code>PrintPlayersChoiceInChat</code> - Print Player's choice to other players in Chat.</li>
+    <li><code>PrintNextMapForAll</code> - Print NextMap command result for all players if true.</li>
     <li><code>ChangeMapAfterWinDraw</code> - Plugin will Change the Map after the end of the game if a map selected after the vote.</li>
     <li><code>ChangeMapAfterVote</code> - Plugin will Change the Map immediately after the vote.</li>
     <li><code>ChangeMapAfterTimeLimit</code> - Plugin will Change the Map after the end of the map (accoring to mp_timelimit).</li>
