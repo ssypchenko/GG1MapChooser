@@ -2009,7 +2009,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         if (voteTimer == null)
         {
             voteTimer = AddTimer(1.0f, EndOfVotes, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE);
-            DoAutoMapVote(null!, timeToVote, SSMC_ChangeMapTime.ChangeMapTime_Now);
+            DoAutoMapVote(null!, timeToVote, SSMC_ChangeMapTime.ChangeMapTime_Now, Config.EndMapVoteWASDMenu);
             Logger.LogInformation("Vote Timer started at MapVoteChangeCommand");
         }
         else
