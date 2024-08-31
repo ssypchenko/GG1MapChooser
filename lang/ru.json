@@ -47,5 +47,6 @@
   "cant.revote": " {red}Нельзя переголосовать, ошибка Меню.",
   "nortv.allowed": " {red}Команда RTV запрещена.",
   "nominate.notallowed": " {red}Команда Nominate запрещена.",
-  "set.nextmap": "Задать Следующую Карту"
+  "set.nextmap": "Задать Следующую Карту",
+  "discord.log": "Следующая карта будет: {0}"
 } 

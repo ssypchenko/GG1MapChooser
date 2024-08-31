@@ -47,5 +47,6 @@
   "cant.revote": " {red}Não é possível votar novamente devido a um erro no menu.",
   "nortv.allowed": " {red}O comando RTV não é permitido.",
   "nominate.notallowed": " {red}O comando de nomeação não é permitido.",
-  "set.nextmap": "Definir próximo mapa"
+  "set.nextmap": "Definir próximo mapa",
+  "discord.log": "O próximo mapa será: {0}"
 }
