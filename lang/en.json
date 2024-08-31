@@ -47,5 +47,6 @@
   "cant.revote": " {red}Can't re-vote because an error with menu.",
   "nortv.allowed": " {red}RTV command is not allowed.",
   "nominate.notallowed": " {red}Nominate command is not allowed.",
-  "set.nextmap": "Set Next Map"
+  "set.nextmap": "Set Next Map",
+  "discord.log": "Next map would be: {0}"
 } 

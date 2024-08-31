@@ -47,5 +47,6 @@
   "cant.revote": "[系统] {red}由于菜单错误，无法重新投票.",
   "nortv.allowed": "[系统] {red}不允许 RTV 命令.",
   "nominate.notallowed": "[系统] {red}不允许提名命令.",
-  "set.nextmap": "设置下一张地图"
+  "set.nextmap": "设置下一张地图",
+  "discord.log": "下一个地图将是: {0}"
 } 
