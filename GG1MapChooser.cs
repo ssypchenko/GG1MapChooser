@@ -3,6 +3,8 @@ using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Data;
+using System.Text;
+using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Localization;
@@ -29,7 +31,7 @@ namespace MapChooser;
 public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
 {
     public override string ModuleName => "GG1_MapChooser";
-    public override string ModuleVersion => "v1.4.6";
+    public override string ModuleVersion => "v1.4.7";
     public override string ModuleAuthor => "Sergey";
     public override string ModuleDescription => "Map chooser, voting, rtv, nominate, etc.";
     public MCCoreAPI MCCoreAPI { get; set; } = null!;
@@ -855,6 +857,8 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             {
                 MapToChange = mapname;
                 MapIsChanging = false;
+                if (Config.DiscordWebhook != "")
+                    _ = SendWebhookMessage(Localizer["discord.log", mapname]);
                 if (mapInfo.WS)
                 {
                     if (mapInfo.MapId.Length > 0)
@@ -2280,6 +2284,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             return;
         
         TryNominate (player, GetMapKeyByDisplayNameOrKey(option.Text));
+        MenuManager.CloseActiveMenu(player);
     }
     private Nominations GGMC_Nominate(string map, CCSPlayerController player)
     {
@@ -2773,6 +2778,22 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         NotNow,
         Error
     };
+    
+    public async Task SendWebhookMessage(string message)
+	{
+		using (var httpClient = new HttpClient())
+		{
+			var payload = new
+			{
+				content = message
+			};
+
+			var jsonPayload = Newtonsoft.Json.JsonConvert.SerializeObject(payload);
+			var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
+
+			var response = await httpClient.PostAsync(Config.DiscordWebhook, content);
+		}
+	}
 }
 public class MCConfig : BasePluginConfig 
 {
@@ -2885,6 +2906,10 @@ public class MCConfig : BasePluginConfig
     /* Number of seconds before the end to run the vote */
     [JsonPropertyName("TriggerSecondsBeforEnd")]
     public int TriggerSecondsBeforEnd { get; set; } = 35;
+
+    /* Discord webhook link to logging map change*/
+    [JsonPropertyName("DiscordWebhook")]
+    public string DiscordWebhook { get; set; } = "";
 }
 public enum SSMC_ChangeMapTime
 {
