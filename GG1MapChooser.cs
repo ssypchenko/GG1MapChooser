@@ -39,11 +39,13 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     public readonly IStringLocalizer<MapChooser> _localizer;
     public MaxRoundsManager roundsManager;
     public TimerManager timeManager;
+    public WebhookService webhookService;
     public MapChooser (IStringLocalizer<MapChooser> localizer)
     {
         _localizer = localizer;
         roundsManager = new(this);
         timeManager = new(this);
+        webhookService = new(this);
     }
     public MCConfig Config { get; set; } = new();
     public void OnConfigParsed (MCConfig config)
@@ -292,6 +294,8 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     private void OnMapStart(string name)
     {
         Logger.LogInformation(name + " loaded");
+        if (Config.DiscordWebhook != "")
+            _ = webhookService.SendWebhookMessage(Localizer["discord.log", GetDisplayName(name)]);
         ResetData("On Map Start");
 //        KillAllTimers();
 //        OnMapEnd(); //kill all timers just in case
@@ -573,9 +577,9 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                 {
                     lock (_timerLock)
                     {
-                        _timeLimitMapChangeTimer = AddTimer((float)(Config.TriggerSecondsBeforEnd - Config.VotingTime), TimeLimitChangeMapTimer, TimerFlags.STOP_ON_MAPCHANGE);
+                        _timeLimitMapChangeTimer = AddTimer((float)(Config.TriggerSecondsBeforEnd - Config.VotingTime + Config.DelayBeforeChangeSeconds), TimeLimitChangeMapTimer, TimerFlags.STOP_ON_MAPCHANGE);
                     }
-                    Logger.LogInformation($"Start MapChange timer in {Config.TriggerSecondsBeforEnd - Config.VotingTime} sec.");
+                    Logger.LogInformation($"Start MapChange timer in {Config.TriggerSecondsBeforEnd - Config.VotingTime + Config.DelayBeforeChangeSeconds} sec.");
                 }
                 Logger.LogInformation("Time to vote because of TimeLimitTimerHandle");
                 StartVote();
@@ -587,9 +591,9 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                 {
                     lock (_timerLock)
                     {
-                        _timeLimitMapChangeTimer = AddTimer((float)Config.TriggerSecondsBeforEnd, TimeLimitChangeMapTimer, TimerFlags.STOP_ON_MAPCHANGE);
+                        _timeLimitMapChangeTimer = AddTimer((float)(Config.TriggerSecondsBeforEnd + Config.DelayBeforeChangeSeconds), TimeLimitChangeMapTimer, TimerFlags.STOP_ON_MAPCHANGE);
                     }
-                    Logger.LogInformation($"Start MapChange timer in {Config.TriggerSecondsBeforEnd} sec.");
+                    Logger.LogInformation($"Start MapChange timer in {Config.TriggerSecondsBeforEnd + Config.DelayBeforeChangeSeconds} sec.");
                 }
             }
         }
@@ -600,9 +604,9 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             {
                 lock (_timerLock)
                 {
-                    _timeLimitMapChangeTimer = AddTimer((float)Config.TriggerSecondsBeforEnd, TimeLimitChangeMapTimer, TimerFlags.STOP_ON_MAPCHANGE);
+                    _timeLimitMapChangeTimer = AddTimer((float)(Config.TriggerSecondsBeforEnd + Config.DelayBeforeChangeSeconds), TimeLimitChangeMapTimer, TimerFlags.STOP_ON_MAPCHANGE);
                 }
-                Logger.LogInformation($"Start MapChange timer in {Config.TriggerSecondsBeforEnd} sec.");
+                Logger.LogInformation($"Start MapChange timer in {Config.TriggerSecondsBeforEnd + Config.DelayBeforeChangeSeconds} sec.");
             }
         }
     }
@@ -857,8 +861,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             {
                 MapToChange = mapname;
                 MapIsChanging = false;
-                if (Config.DiscordWebhook != "")
-                    _ = SendWebhookMessage(Localizer["discord.log", mapname]);
+                
                 if (mapInfo.WS)
                 {
                     if (mapInfo.MapId.Length > 0)
@@ -1253,6 +1256,10 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     {
         if (IsValidPlayer(caller))
         {
+            var manager = GetMenuManager();
+            if(manager == null)
+                return;
+            manager.CloseMenu(caller);
             if (IsVoteInProgress)
             {
                 caller.PrintToChat(Localizer["vote.inprogress"]);
@@ -1278,8 +1285,15 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                     else
                         optionCounts["Yes"] = count + 1;
                     if (Config.PrintPlayersChoiceInChat)
-                        Server.PrintToChatAll(Localizer["player.voteforchange", player.PlayerName]);
+                    {
+                        PrintToServerChat("player.voteforchange", player.PlayerName);
+                    }
+                    else
+                    {
+                        PrintToPlayerChat(player, "player.voteforchange", player.PlayerName);
+                    }
                 }
+                MenuManager.CloseActiveMenu(player);
             });
             GlobalChatMenu.AddMenuOption(Localizer["vote.no"], (player, option) =>
             {
@@ -1291,8 +1305,15 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                     else
                         optionCounts["No"] = count + 1;
                     if (Config.PrintPlayersChoiceInChat)
-                        Server.PrintToChatAll(Localizer["player.voteagainstchange", player.PlayerName, option.Text]);
+                    {
+                        PrintToServerChat("player.voteagainstchange", player.PlayerName);
+                    }
+                    else
+                    {
+                        PrintToPlayerChat(player, "player.voteagainstchange", player.PlayerName);
+                    }
                 }
+                MenuManager.CloseActiveMenu(player);
             });
 //            ChangeOrNotMenu.PostSelectAction = PostSelectAction.Close;
         
@@ -1428,7 +1449,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         {
             foreach (var mapName in players[caller.Slot].selectedMaps)
             {
-                mapsToVote.Add(GetDisplayName(mapName));
+                mapsToVote.Add(mapName);
                 if (++mapsinvote == Config.MapsInVote) break;
             }
         }
@@ -1438,7 +1459,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             {
                 foreach (var mapName in nominatedMaps)
                 {
-                    mapsToVote.Add(GetDisplayName(mapName));
+                    mapsToVote.Add(mapName);
                     if (++mapsinvote == Config.MapsInVote) break;
                 }
 //                mapsToVoteStr = string.Join(", ", mapsToVote);
@@ -1456,7 +1477,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                 foreach (var mapcheck in Maps_from_List)
                 {
                     if ((mapcheck.Value.MinPlayers != 0 && numplayers < mapcheck.Value.MinPlayers) || (mapcheck.Value.MaxPlayers != 0 && numplayers > mapcheck.Value.MaxPlayers) 
-                        || _playedMaps.Contains(mapcheck.Key.ToLower()) || (mapsToVote.Count > 0 && mapsToVote.Contains(GetDisplayName(mapcheck.Key))))
+                        || _playedMaps.Contains(mapcheck.Key.ToLower()) || (mapsToVote.Count > 0 && mapsToVote.Contains(mapcheck.Key)))
                     {
                         continue; //  map does not suite
                     }
@@ -1591,6 +1612,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                         _votedMap++;
                         PrintToServerChat("player.choice", player.PlayerName, option.Text);
                     }
+                    MenuManager.CloseActiveMenu(player);
                 });
             }
         }
@@ -1656,6 +1678,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                                 PrintToPlayerChat(player, "player.choice", player.PlayerName, option.Text);
                             }
                         }
+                        MenuManager.CloseActiveMenu(player);
                     });
                 }
             }
@@ -1685,6 +1708,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         }
 
         AddTimer((float)timeToMapVote, () => TimerVoteMap(changeTime), TimerFlags.STOP_ON_MAPCHANGE);
+        Logger.LogInformation($"TimerVoteMap started to trigger in {timeToMapVote}");
     }
 
     [GameEventHandler(HookMode.Post)]
@@ -2780,20 +2804,56 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     };
     
     public async Task SendWebhookMessage(string message)
-	{
-		using (var httpClient = new HttpClient())
-		{
-			var payload = new
-			{
-				content = message
-			};
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            Logger.LogError("SendWebhookMessage called with empty Message");
+            return;
+        }
 
-			var jsonPayload = Newtonsoft.Json.JsonConvert.SerializeObject(payload);
-			var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
+        using (var httpClient = new HttpClient())
+        {
+            try
+            {
+                var payload = new
+                {
+                    content = message
+                };
 
-			var response = await httpClient.PostAsync(Config.DiscordWebhook, content);
-		}
-	}
+                var jsonPayload = Newtonsoft.Json.JsonConvert.SerializeObject(payload);
+                var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
+
+                // Configure cancellation token if needed (e.g., with a timeout)
+                using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10)))
+                {
+                    var response = await httpClient.PostAsync(Config.DiscordWebhook, content, cts.Token);
+
+                    // Ensure a successful status code
+                    response.EnsureSuccessStatusCode();
+                }
+            }
+            catch (HttpRequestException ex)
+            {
+                // Log and handle network-related errors
+                Console.WriteLine($"HttpRequestException occurred: {ex.Message}");
+                // Optionally rethrow or handle the exception in a way that suits your application
+                throw;
+            }
+            catch (TaskCanceledException ex)
+            {
+                // Handle request timeout scenarios
+                Console.WriteLine($"Request timed out: {ex.Message}");
+                // Handle accordingly, for example, retry logic or notifying the user
+            }
+            catch (Exception ex)
+            {
+                // Catch all other exceptions
+                Console.WriteLine($"An error occurred: {ex.Message}");
+                // You might want to rethrow or handle specific cases
+                throw;
+            }
+        }
+    }
 }
 public class MCConfig : BasePluginConfig 
 {
@@ -2972,7 +3032,16 @@ public class MaxRoundsManager
     {
         get
         {
-            var GameRules = GetGameRules();
+            CCSGameRules GameRules = null!;
+            try
+            {
+                GameRules = GetGameRules();
+            }
+            catch (Exception ex)
+            {
+                Plugin.Logger.LogError($"Can't GetGameRules: {ex}.");
+                return false;
+            }
             return GameRules?.WarmupPeriod ?? false;
         }
     }
@@ -3010,7 +3079,16 @@ public class MaxRoundsManager
     {
         get
         {
-            var GameRules = GetGameRules();
+            CCSGameRules GameRules = null!;
+            try
+            {
+                GameRules = GetGameRules();
+            }
+            catch (Exception ex)
+            {
+                Plugin.Logger.LogError($"Can't GetGameRules: {ex}.");
+                return 0;
+            }
             var played = MaxRoundsValue - (GameRules != null ? GameRules.TotalRoundsPlayed : 0);
             if (played < 0)
                 return 0;
@@ -3092,10 +3170,10 @@ public class MaxRoundsManager
             {
                 Plugin.Logger.LogError($"VoteDependsOnRoundWins set true, but cvar mp_maxrounds set less than 2. Plugin can't work correctly with these settings.");
             }
-            if (Plugin.Config.VoteDependsOnTimeLimit)
+/*            if (Plugin.Config.VoteDependsOnTimeLimit)
             {
                 Plugin.Logger.LogError("VoteDependsOnRoundWins may not work because VoteDependsOnTimeLimit set true");
-            }
+            } */
         }
     }
 }
@@ -3150,6 +3228,70 @@ public class TimerManager
     {
         _running = false;
         _signal.Release(); // Ensure the worker can exit if it's waiting
+    }
+}
+public class WebhookService
+{
+    MapChooser Plugin;
+    private readonly HttpClient httpClient;
+
+    public WebhookService(MapChooser plugin)
+    {
+        Plugin = plugin;
+        httpClient = new HttpClient();
+    }
+
+    public async Task SendWebhookMessage(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            Plugin.Logger.LogError("SendWebhookMessage called with empty Message");
+            return;
+        }
+
+        try
+        {
+            var payload = new
+            {
+                content = message
+            };
+
+            var jsonPayload = Newtonsoft.Json.JsonConvert.SerializeObject(payload);
+            var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
+
+            // Configure cancellation token if needed (e.g., with a timeout)
+            using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10)))
+            {
+                var response = await httpClient.PostAsync(Plugin.Config.DiscordWebhook, content, cts.Token);
+
+                // Ensure a successful status code
+                response.EnsureSuccessStatusCode();
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            // Log and handle network-related errors
+            Console.WriteLine($"HttpRequestException occurred: {ex.Message}");
+            Server.NextFrame(() => {
+                Plugin.Logger.LogError($"SendWebhookMessage: HttpRequestException occurred: {ex.Message}");
+            });
+        }
+        catch (TaskCanceledException ex)
+        {
+            // Handle request timeout scenarios
+            Console.WriteLine($"Request timed out: {ex.Message}");
+            Server.NextFrame(() => {
+                Plugin.Logger.LogError($"SendWebhookMessage: Request timed out: {ex.Message}");
+            });
+        }
+        catch (Exception ex)
+        {
+            // Catch all other exceptions
+            Console.WriteLine($"An error occurred: {ex.Message}");
+            Server.NextFrame(() => {
+                Plugin.Logger.LogError($"SendWebhookMessage: An error occurred: {ex.Message}");
+            });
+        }
     }
 }
 public class MCCoreAPI : MCIAPI
