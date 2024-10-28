@@ -48,5 +48,9 @@
   "nortv.allowed": "[系统] {red}不允许 RTV 命令.",
   "nominate.notallowed": "[系统] {red}不允许提名命令.",
   "set.nextmap": "设置下一张地图",
-  "discord.log": "下一个地图将是: {0}"
+  "menu.selection.left": "<img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/left.gif' class=''>",
+  "menu.selection.right": "<img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/right.gif' class=''>",
+  "menu.title.prefix": "<font color='green'>",
+  "menu.more.options.below": "<img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/arrow.gif' class=''> <img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/arrow.gif' class=''> <img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/arrow.gif' class=''>",
+  "menu.bottom.text": "           <font color='cyan'>[ WASD - 移动 ]</font> <br><font color='purple'>[ <img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/tab.gif' class=''> - 退出 ]"
 } 

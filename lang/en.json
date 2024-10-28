@@ -48,5 +48,9 @@
   "nortv.allowed": " {red}RTV command is not allowed.",
   "nominate.notallowed": " {red}Nominate command is not allowed.",
   "set.nextmap": "Set Next Map",
-  "discord.log": "Next map would be: {0}"
+  "menu.selection.left": "<img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/left.gif' class=''>",
+  "menu.selection.right": "<img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/right.gif' class=''>",
+  "menu.title.prefix": "<font color='green'>",
+  "menu.more.options.below": "<img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/arrow.gif' class=''> <img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/arrow.gif' class=''> <img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/arrow.gif' class=''>",
+  "menu.bottom.text": "           <font color='cyan'>[ WASD - To Move ]</font> <br><font color='purple'>[ <img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/tab.gif' class=''> - To Exit ]"
 } 

@@ -17,6 +17,7 @@
     <li><strong>Map Weights</strong> - Randomly selects maps to vote for the next map with configurable weights. The higher the weight, the more likely the map will be included in the vote list.</li>
     <li><strong>Admin Commands</strong> - Includes commands for admins to start voting, to vote if players want to change the map, to simply change or set the next map .</li>
     <li><strong>Map load at the game end</strong> - If this set in the config, plugin will be responsible for the load of the winning in vote map.</li>
+    <li><strong>Maps log in Discord</strong> - Voted or/and Loaded map can be logged in a Discord text channel with configurable template.</li> 
 </ul>
 
 <h2>Configuration Files</h2>
@@ -62,6 +63,16 @@
     <li><code>TriggerRoundsBeforEndVoteAtRoundStart</code> - Vote is triggered in number of rounds before the game end and executed on RoundStart if true and RoundEnd if false.</li>
     <li><code>VoteDependsOnTimeLimit</code> - Set to true if the vote start depends on the time limit to play.</li>
     <li><code>TriggerSecondsBeforEnd</code> - Number of seconds before the end of the map to start the vote. The map time is defined in cvar "mp_timelimit"</li>
+    <li><code>DiscordWebhook</code> - Discord webhook link to report loaded maps in a Discord channel.</li> 
+</ul>
+
+<h3>Discord message Configuration</h3>
+<p>Define the text you want to display in <code>csgo/addons/counterstrikesharp/configs/plugins/GG1MapChooser/NextMapMessage.json</code>:</p>
+<ul>
+    <li>The config file will be automatically created if not exists.</li>
+    <li>You can modify or localize the text: <code>content = "Next map: "</code></li>
+    <li>If you want to display map pictures in the messages you need to specifying the resource’s address: <code>url = "https://example.com/folder/with/mapimages/"</code></li>
+    <li>Map images must follow the naming convention <mapname>.jpg, matching exactly with the map names used in the Workshop and in GGMCmaps.json</li>
 </ul>
 
 <h2>Usage</h2>
@@ -75,11 +86,12 @@
 <ul>
     <li>If you call the vote from external plugin you have two options:
         <ul>
-            <li>Use "ggmc_mapvote_start" if the external plugin ends the game so the server will change the map after the Win/Draw</li>
-            <li>Use "ggmc_mapvote_with_change" command if you want that mapchooser changes the map itself immediately after the vote.</li>
+            <li>Use <code>ggmc_mapvote_start</code> if the external plugin ends the game so the server will change the map after the Win/Draw</li>
+            <li>Use <code>ggmc_mapvote_with_change</code> command if you want that mapchooser changes the map itself immediately after the vote.</li>
         </ul>
         <p>In that case you need to have "ChangeMapAfterWinDraw": false, "ChangeMapAfterVote": false, "VoteDependsOnRoundWins": false, "VoteDependsOnTimeLimit": false.</p>
     </li>
+    <li>If the vote is completed mid-game and automatic map change settings are not viable (e.g., maps outside of the collection), command <code>ggmc_change_nextmap</code> can be used in server scripts at the end of the game.</li>
     <li>Voting Before the End of Multiple Rounds:<br>
         <ul>
             <li>To have a vote before the game ends, set the following configuration:<br>
@@ -113,6 +125,7 @@
 <h2>Admin Commands</h2>
 <ul>
     <li><strong>Map Change:</strong> Use <code>css_maps</code> or <code>!maps</code> to open a menu with options: simply change the map (manually choose or automatic selection); start a vote with automatic or custom selections; start a vote to see if players agree to change the map; set the next map.</li>
+    <li>Players or admins confirm WASD menu options using the “Jump” button (typically “space”) when in a team, while spectators use the “move right” button. Due to technical constraints, the “jump” button doesn’t function in spectator mode.</li>
     <li><strong>Quick Map Selection:</strong> Use <code>ggmap &lt;partofmapname&gt;</code> to quickly find and switch to a map using a partial name match.</li>
 </ul>
 
@@ -122,6 +135,7 @@
     <li><code>ggmc_mapvote_with_change [time]</code> - Trigger a map vote externally with an optional time parameter and immediate map change after the vote ends. This command can be used with set workshop map IDs in the map list (GGMCmaps.json).</li>
     <li><code>ggmc_auto_mapchange</code> - Automatically change to a random map.</li>
     <li><code>ggmc_nortv</code> - Temporarily disable the RTV command to maintain game continuity.</li>
+    <li><code>ggmc_change_nextmap</code> - Immediately changes the map to the previously voted map. .</li>
 </ul>
 
 <h3>Other Commands:</h3>
@@ -138,6 +152,25 @@
     <li>Even if a map ID is set for the workshop map, it is important to have the name the maps exactly the same as it is in the Workshop. Otherwise, you won't be able to use the WorkshopMapProblemCheck feature to check if the requested map is loaded or if it is missing in the workshop, because the map owner can delete the map at any time.</li>
 </ul>
 
+<h2>Plugin APIs</h2>
+<p>Plugin expose to other developers these functions via API:</p>
+<ul>
+    <li>Maps API:
+      <ul>
+        <li><code>public bool GGMC_IsVoteInProgress();</code> - confirms whether the vote in progress now.</li>
+      </ul>
+    </li>
+    <li>WASD Menu API:
+      <ul>
+        <li><code>public IWasdMenu CreateMenu(string title = "");</code> - create new menu object;</li>
+        <li><code>public void OpenMainMenu(CCSPlayerController? player, IWasdMenu? menu);</code> - open the menu as main menu;</li>
+        <li><code>public void CloseMenu(CCSPlayerController? player);</code> - close all menus;</li>
+        <li><code>public void OpenSubMenu(CCSPlayerController? player, IWasdMenu? menu);</code> - open menu as submenu;</li>
+        <li><code>public void CloseSubMenu(CCSPlayerController? player);</code> - close current submenu and go to previous menu/submenu;</li>
+        <li><code> public void CloseAllSubMenus(CCSPlayerController? player);</code> - close all submenus and go to main menu;</li>
+      </ul>
+    </li>
+</ul>
 <h2>Disclaimer</h2>
 <p>The plugin is provided <strong>"as-is"</strong> and fulfills the specific requirements it was designed for. While I am not planning further major updates, I welcome suggestions that might benefit a broader user base, which could lead to additional features.</p>
 
