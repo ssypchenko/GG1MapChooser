@@ -67,21 +67,21 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
 //        roundsManager.CheckConfig();
         if (Config.TimeLimitSettings.VoteDependsOnTimeLimit)
         {
-            var TimeLimit = ConVar.Find("mp_timelimit");
+/*            var TimeLimit = ConVar.Find("mp_timelimit");
             var TimeLimitValue = TimeLimit?.GetPrimitiveValue<float>() ?? 0;
             if (TimeLimitValue < 1)
             {
                 Logger.LogError($"VoteDependsOnTimeLimit set true, but cvar mp_timelimit set less than 1. Plugin can't work correctly with these settings.");
-            }
+            } */
             if (Config.TimeLimitSettings.TriggerSecondsBeforeEnd < Config.VoteSettings.VotingTime)
             {
                 Config.TimeLimitSettings.TriggerSecondsBeforeEnd = Config.VoteSettings.VotingTime + 1;
                 Logger.LogInformation($"VoteDependsOnTimeLimit: TriggerSecondsBeforeEnd updates to {Config.VoteSettings.VotingTime + 1} which is minimum value for VotingTime {Config.VoteSettings.VotingTime} in config.");
-            }
+            } /*
             if (Config.TimeLimitSettings.TriggerSecondsBeforeEnd < (TimeLimitValue * 60))
             {
                 Logger.LogError($"VoteDependsOnTimeLimit set true, but TriggerSecondsBeforEnd is more than cvar mp_timelimit value. Plugin can't work correctly with these settings.");
-            }
+            } */
         }
     }
     public bool mapChangedOnStart = false; 
@@ -3064,6 +3064,9 @@ public class DiscordSettings
     /* Send message after Vote */
     [JsonPropertyName("DiscordMessageAfterVote")]
     public bool DiscordMessageAfterVote { get; set; } = false;
+    /* Extension of map pictures: jpg, png, etc.*/
+    [JsonPropertyName("PictureExtension")]
+    public string PictureExtension { get; set; } = "jpg";
 }
 public class OtherSettings
 {    
@@ -3429,8 +3432,8 @@ public class WebhookService
             var embeds = root.GetProperty("embeds").EnumerateArray().ToArray();
             var embed = embeds[0].Clone();
             var imageUrl = embed.GetProperty("image").GetProperty("url").GetString();
-            imageUrl = imageUrl + mapName + ".jpg";
-
+            imageUrl = imageUrl + mapName + "." + Plugin.Config.DiscordSettings.PictureExtension;
+            
             // Construct new JSON object
             var updatedJson = new
             {
