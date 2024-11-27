@@ -52,5 +52,8 @@
   "menu.selection.right": "<img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/right.gif' class=''>",
   "menu.title.prefix": "<font color='green'>",
   "menu.more.options.below": "<img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/arrow.gif' class=''> <img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/arrow.gif' class=''> <img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/arrow.gif' class=''>",
-  "menu.bottom.text": "           <font color='cyan'>[ WASD - Mover ]</font> <br><font color='purple'>[ <img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/tab.gif' class=''> - Sair ]"
+  "menu.bottom.text": "           <font color='cyan'>[ WASD - Mover ]</font> <br><font color='purple'>[ <img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/tab.gif' class=''> - Sair ]",
+  "time.left": "{green}Tempo restante: {0}",
+  "rounds.left": "{red}Rodadas restantes: {0}",
+  "wins.left": "{yellow}Vitórias restantes: {0}"
 } 

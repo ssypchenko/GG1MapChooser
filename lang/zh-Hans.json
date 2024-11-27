@@ -52,5 +52,8 @@
   "menu.selection.right": "<img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/right.gif' class=''>",
   "menu.title.prefix": "<font color='green'>",
   "menu.more.options.below": "<img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/arrow.gif' class=''> <img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/arrow.gif' class=''> <img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/arrow.gif' class=''>",
-  "menu.bottom.text": "           <font color='cyan'>[ WASD - 移动 ]</font> <br><font color='purple'>[ <img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/tab.gif' class=''> - 退出 ]"
+  "menu.bottom.text": "           <font color='cyan'>[ WASD - 移动 ]</font> <br><font color='purple'>[ <img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/tab.gif' class=''> - 退出 ]",
+  "time.left": "{green}剩余时间: {0}",
+  "rounds.left": "{red}剩余回合数: {0}",
+  "wins.left": "{yellow}剩余胜利: {0}"
 } 
