@@ -108,7 +108,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     private Timer? voteEndTimer = null;
     private DateTime lastRoundStartEventTime = DateTime.MinValue;
     private int RestartProblems = 0;
-    private bool Restart = true;
+    public bool MapIsChanging = false;
     public bool IsVoteInProgress { get; set; } = false;
     private Timer? _timeLimitTimer = null;
     private Timer? _timeLimitMapChangeTimer = null;
@@ -130,7 +130,6 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     private string? _roundEndMap;
     private List<string> _playedMaps = new List<string>();
     public string MapToChange = ""; 
-    public bool MapIsChanging = false;
     private readonly object _timerLock = new object();
     public override void Load(bool hotReload) 
     {
@@ -265,7 +264,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                     {   
                         ResetData("On last client disconnect");
 
-                        if (Config.OtherSettings.LastDisconnectedChangeMap && changeRequested == null && !Restart)
+                        if (Config.OtherSettings.LastDisconnectedChangeMap && changeRequested == null && !MapIsChanging)
                         {
                             Logger.LogInformation($"Requested map change on last disconnected player");
                             changeRequested = AddTimer(60.0f, Timer_ChangeMapOnEmpty, TimerFlags.STOP_ON_MAPCHANGE);
@@ -313,6 +312,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     }
     private void OnMapStart(string name)
     {
+        MapIsChanging = false;
         Logger.LogInformation(name + " loaded");
         if (Config.DiscordSettings.DiscordWebhook != "" && Config.DiscordSettings.DiscordMessageMapStart)
             _ = webhookService.SendWebhookMessage(name, GetDisplayName(name));
@@ -358,15 +358,14 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             
             if (Config.VoteSettings.RememberPlayedMaps > 0)
             {
-                if (_playedMaps.Count > 0)
-                {   
-                    if ( _playedMaps.Count >= Config.VoteSettings.RememberPlayedMaps)
+                if (!_playedMaps.Contains(name.ToLower()))
+                {
+                    if (_playedMaps.Count > 0 && _playedMaps.Count >= Config.VoteSettings.RememberPlayedMaps)
                     {
                         _playedMaps.RemoveAt(0);
                     }
-                }
-                if (!_playedMaps.Contains(name.ToLower()))
                     _playedMaps.Add(name.ToLower());
+                }
 
                 string excludedMaps = string.Join(", ", _playedMaps);
 
@@ -377,11 +376,11 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             {
                 Logger.LogInformation($"OnMapStart Requested map change after the server restarted");
                 changeRequested = AddTimer((float)Config.OtherSettings.RandomMapOnStartDelay, Timer_ChangeMapOnEmpty, TimerFlags.STOP_ON_MAPCHANGE);
-                if (changeRequested == null)
+/*                if (changeRequested == null)
                 {
                     Console.WriteLine("*************** Could not create timer for map change on server start");
                     Logger.LogError("Could not create timer for map change on server start");
-                }
+                } */
             }
             if (Config.RTVSettings.AllowRTV && Config.RTVSettings.RTVDelayFromStart > 0)
             {
@@ -420,12 +419,15 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     private void OnMapEnd()
     {
         Logger.LogInformation("OnMapEnd executed");
+        SimpleKillTimer(changeRequested);
         changeRequested = null;
         SimpleKillTimer(_timeLimitTimer);
         _timeLimitTimer = null;
         SimpleKillTimer(_timeLimitMapChangeTimer);
         _timeLimitMapChangeTimer = null;
         SimpleKillTimer(rtvTimer);
+        canRtv = true;
+        rtvCoolDownDuration = 0;
         rtvTimer = null;
         SimpleKillTimer(voteEndTimer);
         voteEndTimer = null;
@@ -461,8 +463,6 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             return HookResult.Continue;
 
         lastRoundStartEventTime = DateTime.Now;
-        Restart = false;
-        MapIsChanging = false;
         if (canVote)
         {
             roundsManager.UpdateMaxRoundsValue();
@@ -509,7 +509,6 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     }
     public HookResult EventRoundEndHandler(EventRoundEnd @event, GameEventInfo info)
     {
-        Restart = true;
         if (@event is null)
             return HookResult.Continue;
         CsTeam? winner = Enum.IsDefined(typeof(CsTeam), (byte)@event.Winner) ? (CsTeam)@event.Winner : null;
@@ -822,7 +821,6 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         }
         else
         {
-            MapIsChanging = true;
             string mapname = mapChange;
     //        _selectedMap = null;
             PrintToServerCenter("mapchange.to", mapname);
@@ -832,11 +830,11 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             MapToChange = mapname;
             if (changeTime == SSMC_ChangeMapTime.ChangeMapTime_Now)
             {
+                MapIsChanging = true;
                 ChangeMapInFive(mapname);
             }
             else if (changeTime == SSMC_ChangeMapTime.ChangeMapTime_MapEnd)
             {
-                MapIsChanging = false;
                 if (!Config.VoteSettings.ChangeMapAfterVote)
                 {
                     Server.ExecuteCommand($"nextlevel {mapname}");
@@ -878,7 +876,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                 Logger.LogInformation($"DoMapChange: TimeLimit now {mp_timelimit.GetPrimitiveValue<float>()}");
                 if (Config.TimeLimitSettings.VoteDependsOnTimeLimit)
                 {
-                    var secondsLeft = (int)TimeLimitValue * 60 - (int)(DateTime.UtcNow - timeLimitStartEventTime).TotalSeconds;
+                    var secondsLeft = (int)TimeLimitValue * 60 - (int)(DateTime.Now - timeLimitStartEventTime).TotalSeconds;
 //                    var secondsPassed = timelimitOld * 60 - Config.TimeLimitSettings.TriggerSecondsBeforeEnd + Config.VoteSettings.VotingTime;                        
 /*                    float newTrigger = Config.TimeLimitSettings.TriggerSecondsBeforeEnd;
                     
@@ -927,7 +925,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             if (Maps_from_List.TryGetValue(mapname, out var mapInfo))
             {
                 MapToChange = mapname;
-                MapIsChanging = false;
+//                MapIsChanging = false;
                 
                 if (mapInfo.WS)
                 {
@@ -1759,8 +1757,11 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         }
         if (Config.TimeLimitSettings.VoteDependsOnTimeLimit)
         {
-            int remainingTime = (int)TimeLimitValue * 60 - (int)(DateTime.UtcNow - timeLimitStartEventTime).TotalSeconds;
-            caller.PrintToChat(Localizer["time.left", remainingTime]);
+            int timePassed = (int)(DateTime.Now - timeLimitStartEventTime).TotalSeconds;
+            int remainingTime = (int)TimeLimitValue * 60 - timePassed;
+            int minutesLeft = remainingTime / 60; // Get the total minutes
+            int secondsLeft = remainingTime % 60; // Get the remaining seconds
+            caller.PrintToChat(Localizer["time.left", minutesLeft, secondsLeft]);
         }
         if (Config.WinDrawSettings.VoteDependsOnRoundWins)
         {
@@ -1838,7 +1839,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         {
             if (rtvTimer != null) //Работает таймер задержки
             {
-                int remainingTime = rtvCoolDownDuration - (int)(DateTime.UtcNow - rtvCooldownStartTime).TotalSeconds;
+                int remainingTime = rtvCoolDownDuration - (int)(DateTime.Now - rtvCooldownStartTime).TotalSeconds;
                 caller.PrintToChat(Localizer["nortv.time", remainingTime]);
                 return;
             }
@@ -2572,25 +2573,13 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         _selectedMap = null;
         _votedMap = 0;
         optionCounts = new Dictionary<string, int>(0);
-        if (rtvTimer != null)
-        {
-            lock (_timerLock)
-            {
-                var timerToKill = rtvTimer;
-                timeManager.EnqueueOperation(async () => 
-                {
-                    await KillTimer(timerToKill);
-                });
-                rtvTimer = null;
-            }
-        }
+        SimpleKillTimer(rtvTimer);
+        rtvTimer = null;
         canRtv = true;
         CleanRTVArrays();
         rtvCoolDownDuration = 0;
-//        rtv_can_start = 0;
         rtvRestartProblems = 0;
         roundsManager.InitialiseMap();
-        MapIsChanging = false;
         GlobalChatMenu = null;
         GlobalWASDMenu = null;
         _timeLimitVoteRoundStart = false;
@@ -2626,14 +2615,15 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     {
         if (rtvTimer == null && interval > 0)
         {
-            lock (_timerLock)
-            {
-                canRtv = false;
-                rtvCoolDownDuration = interval;
-                rtvCooldownStartTime = DateTime.UtcNow;
-                Logger.LogInformation("rtv cooldown on, rtv is not allowed");
-                rtvTimer = AddTimer((float)interval, Handle_RTVTimer, TimerFlags.STOP_ON_MAPCHANGE);
-            }
+            canRtv = false;
+            rtvCoolDownDuration = interval;
+            rtvCooldownStartTime = DateTime.Now;
+            Logger.LogInformation($"rtv cooldown on at {rtvCooldownStartTime.ToLongTimeString()}, rtv is not allowed");
+            rtvTimer = AddTimer((float)interval, Handle_RTVTimer, TimerFlags.STOP_ON_MAPCHANGE);
+        }
+        else
+        {
+            Logger.LogWarning($"MakeRTVTimer: rtvTimer is not null or interval ({interval})");
         }
     }
     private void Handle_RTVTimer()
