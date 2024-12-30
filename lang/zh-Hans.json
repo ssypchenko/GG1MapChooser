@@ -55,5 +55,9 @@
   "menu.bottom.text": "           <font color='cyan'>[ WASD - 移动 ]</font> <br><font color='purple'>[ <img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/tab.gif' class=''> - 退出 ]",
   "time.left": "{green}剩余时间：{0} 分钟, {1} 秒.",
   "rounds.left": "{red}剩余回合数: {0}.",
-  "wins.left": "{yellow}剩余胜利: {0}."
+  "wins.left": "{yellow}剩余胜利: {0}.",
+  "menu.move": "移动",
+  "menu.select": "选择",
+  "menu.back": "返回",
+  "menu.exit": "退出"
 } 

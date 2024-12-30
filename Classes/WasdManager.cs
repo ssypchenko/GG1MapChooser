@@ -1,4 +1,5 @@
-﻿using CounterStrikeSharp.API.Core;
+﻿using CounterStrikeSharp.API;
+using CounterStrikeSharp.API.Core;
 using MapChooserAPI;
 
 namespace MapChooser;
@@ -40,11 +41,12 @@ public class WasdManager : IWasdMenuManager
         WASDMenu.Players[player.Slot].OpenSubMenu(menu);
     }
 
-    public IWasdMenu CreateMenu(string title = "")
+    public IWasdMenu CreateMenu(string title = "", bool freezePlayer = true)
     {
         WasdMenu menu = new WasdMenu
         {
-            Title = title
+            Title = title,
+            FreezePlayer = freezePlayer
         };
         return menu;
     }

@@ -5,12 +5,21 @@ using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Translations;
 using Microsoft.Extensions.Localization;
+using CounterStrikeSharp.API.Modules.Memory;
 using MapChooserAPI;
+using System.Runtime.CompilerServices;
+using Microsoft.Extensions.Logging;
 
 namespace MapChooser;
 
 public class WasdMenuPlayer
 {
+    private readonly MapChooser _plugin;
+
+    public WasdMenuPlayer(MapChooser plugin)
+    {
+        _plugin = plugin;
+    }
     public CCSPlayerController player { get; set; } = null!;
     public WasdMenu? MainMenu = null;
     public LinkedListNode<IWasdMenuOption>? CurrentChoice = null;
@@ -19,20 +28,51 @@ public class WasdMenuPlayer
     public int VisibleOptions = 5;
     public IStringLocalizer? Localizer = null;
     public PlayerButtons Buttons { get; set; }
-
+    string strSelect = "Select";
+    string strMove = "Move";
+    string strExit = "Exit";
+    string strBack = "Back";
+    public void UpdateLocalization()
+    {
+        if (player != null && Localizer != null)
+        {
+            using (new WithTemporaryCulture(player.GetLanguage()))
+            {
+                strSelect = Localizer["menu.select"];
+                strMove = Localizer["menu.move"];
+                strExit = Localizer["menu.exit"];
+                strBack = Localizer["menu.back"];
+            }
+        }
+    }
     public void OpenMainMenu(WasdMenu? menu)
     {
         if (menu == null)
         {
-            MainMenu = null;
             CurrentChoice = null;
             CenterHtml = "";
+            if (MainMenu != null && MainMenu.FreezePlayer && player != null)
+            {
+                player.UnFreeze();
+            }
+            MainMenu = null;
             return;
         }
         MainMenu = menu;
         VisibleOptions = menu.Title != "" ? 4 : 5;
         CurrentChoice = MainMenu.Options?.First;
         MenuStart = CurrentChoice;
+        
+        if (MainMenu.FreezePlayer && player != null)
+        {
+            _plugin.Logger.LogInformation("*************player freezed");
+            player.Freeze();
+        }
+
+        if (_plugin.Config.MenuSettings.SoundInMenu && player != null)
+        {
+            player.ExecuteClientCommand("play Ui/buttonrollover.vsnd_c");
+        }
         UpdateCenterHtml();
     }
 
@@ -42,6 +82,10 @@ public class WasdMenuPlayer
         {
             CurrentChoice = MainMenu?.Options?.First;
             MenuStart = CurrentChoice;
+            if (_plugin.Config.MenuSettings.SoundInMenu && player != null)
+            {
+                player.ExecuteClientCommand("play Ui/buttonrollover.vsnd_c");
+            }
             UpdateCenterHtml();
             return;
         }
@@ -49,6 +93,10 @@ public class WasdMenuPlayer
         VisibleOptions = menu.Title != "" ? 4 : 5;
         CurrentChoice = menu.Options?.First;
         MenuStart = CurrentChoice;
+        if (_plugin.Config.MenuSettings.SoundInMenu && player != null)
+        {
+            player.ExecuteClientCommand("play Ui/buttonrollover.vsnd_c");
+        }
         UpdateCenterHtml();
     }
     public void GoBackToPrev(LinkedListNode<IWasdMenuOption>? menu)
@@ -73,13 +121,23 @@ public class WasdMenuPlayer
         }
         else
             MenuStart = CurrentChoice.List?.First;
+        if (_plugin.Config.MenuSettings.SoundInMenu && player != null)
+        {
+            player.ExecuteClientCommand("play Ui/buttonrollover.vsnd_c");
+        }
         UpdateCenterHtml();
     }
 
     public void CloseSubMenu()
     {
         if(CurrentChoice?.Value.Parent?.Prev == null)
+        {
+            if (MainMenu != null && MainMenu.FreezePlayer && player != null)
+            {
+                player.UnFreeze();
+            }
             return;
+        }
         GoBackToPrev(CurrentChoice?.Value.Parent.Prev);
     }
 
@@ -87,10 +145,37 @@ public class WasdMenuPlayer
     {
         OpenSubMenu(null);
     }
+
+/*    public void CloseMenu()
+    {
+        if (MainMenu == null)
+            return;
+
+        CurrentChoice = null;
+        MenuStart = null;
+        CenterHtml = "";
+
+        if (player != null)
+        {
+            if (MainMenu != null && MainMenu.FreezePlayer)
+            {
+                player.UnFreeze();
+            }
+            player.PrintToCenterHtml(" ");
+        }
+        MainMenu = null;
+    } */
     
     public void Choose()
     {
-        CurrentChoice?.Value.OnChoose?.Invoke(player, CurrentChoice.Value);
+        if (player != null)
+        {
+            if (_plugin.Config.MenuSettings.SoundInMenu)
+            {
+                player.ExecuteClientCommand("play Ui/buttonrollover.vsnd_c");
+            }
+            CurrentChoice?.Value.OnChoose?.Invoke(player, CurrentChoice.Value);
+        }
     }
 
     public void ScrollDown()
@@ -99,6 +184,10 @@ public class WasdMenuPlayer
             return;
         CurrentChoice = CurrentChoice.Next ?? CurrentChoice.List?.First;
         MenuStart = CurrentChoice!.Value.Index >= VisibleOptions ? MenuStart!.Next : CurrentChoice.List?.First;
+        if (_plugin.Config.MenuSettings.SoundInMenu && player != null)
+        {
+            player.ExecuteClientCommand("play Ui/buttonclick.vsnd_c");
+        }
         UpdateCenterHtml();
     }
     
@@ -115,6 +204,10 @@ public class WasdMenuPlayer
         }
         else
             MenuStart = CurrentChoice!.Value.Index >= VisibleOptions ? MenuStart!.Previous : CurrentChoice.List?.First;
+        if (_plugin.Config.MenuSettings.SoundInMenu && player != null)
+        {
+            player.ExecuteClientCommand("play Ui/buttonclick.vsnd_c");
+        }
         UpdateCenterHtml();
     }
 
@@ -122,37 +215,76 @@ public class WasdMenuPlayer
     {
         if (CurrentChoice == null || MainMenu == null)
             return;
-
         StringBuilder builder = new StringBuilder();
+        builder.AppendLine("<div>");
         int i = 0;
-        LinkedListNode<IWasdMenuOption>? option = MenuStart!;
-        
-        using (new WithTemporaryCulture(player.GetLanguage()))
+        LinkedListNode<IWasdMenuOption>? option = MenuStart;        
+        if (option != null && option.Value != null && option.Value.Parent != null)
         {
-            if (option.Value.Parent?.Title != "")
+            if (option.Value.Parent.Title != "")
             {
-                builder.AppendLine($"{Localizer?["menu.title.prefix"]}{option.Value.Parent?.Title}</u><font color='white'><br>");
+                builder.Append($"<b><font color='red' class='fontSize-m'>{option.Value.Parent.Title}</font></b><br>");
             }
-
-            while (i < VisibleOptions && option != null )
+            string leftArrow = "◄";
+            string rightArrow = "►";
+            while (i < VisibleOptions)
             {
                 if (option == CurrentChoice)
-                    builder.AppendLine($"{Localizer?["menu.selection.left"]} {option.Value.OptionDisplay} {Localizer?["menu.selection.right"]} <br>");
+                {
+                    builder.AppendLine($"<font color='yellow'>{rightArrow}[</font> <font color='#9acd32' class='fontSize-m'>{option.Value.OptionDisplay}</font> <font color='yellow'>]{leftArrow}</font></b><br>");
+                }
                 else
-                    builder.AppendLine($"{option.Value.OptionDisplay} <br>");
-                option = option.Next;
+                {
+                    builder.AppendLine($"<font color='white' class='fontSize-m'>{option?.Value.OptionDisplay}</font><br>");
+                }
                 i++;
+                option = option?.Next;
             }
-
-            if (option != null) { // more options
-                builder.AppendLine(
-                    $"{Localizer?["menu.more.options.below"]}");
-            }
-
-            builder.AppendLine("<br>" +
-                            $"{Localizer?["menu.bottom.text"]}<br>");
-            builder.AppendLine("</div>");
         }
+
+        if (option != null) { // more options
+            builder.AppendLine("<img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/arrow.gif' class=''> <img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/arrow.gif' class=''> <img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/arrow.gif' class=''><br>");
+        }
+
+        if (MenuStart?.Value.Parent!.Prev != null)
+        {
+            builder.AppendLine($"<font color='#ff3333' class='fontSize-sm'>{strSelect}:<font color='#f5a142'>[E]<font color='#FFFFFF'>|<font color='#ff3333' class='fontSize-m'>{strBack}:<font color='#f5a142'>[A]<font color='#FFFFFF'>|<font color='#ff3333'>{strExit}:<font color='#f5a142'>[R]</font><br>");
+        }
+        else
+        {
+            builder.AppendLine($"<font color='#ff3333' class='fontSize-sm'>{strMove}:<font color='#f5a142'>[W/S]<font color='#FFFFFF'>|<font color='#ff3333' class='fontSize-m'>{strSelect}:<font color='#f5a142'>[E]<font color='#FFFFFF'>|<font color='#ff3333'>{strExit}:<font color='#f5a142'>[R]</font><br>");
+        }
+        builder.AppendLine("</div>");
+
         CenterHtml = builder.ToString();
+    }
+}
+public static class CCSPlayerControllerExtensions
+{
+    public static void Freeze(this CCSPlayerController player)
+    {
+        CCSPlayerPawn? playerPawn = player.PlayerPawn.Value;
+
+        if (playerPawn == null)
+        {
+            return;
+        }
+        playerPawn.ChangeMovetype(MoveType_t.MOVETYPE_OBSOLETE);
+    }
+    public static void UnFreeze(this CCSPlayerController player)
+    {
+        CCSPlayerPawn? playerPawn = player.PlayerPawn.Value;
+
+        if (playerPawn == null)
+        {
+            return;
+        }
+        playerPawn.ChangeMovetype(MoveType_t.MOVETYPE_WALK);
+    }
+    private static void ChangeMovetype(this CBasePlayerPawn pawn, MoveType_t movetype)
+    {
+        pawn.MoveType = movetype;
+        Schema.SetSchemaValue(pawn.Handle, "CBaseEntity", "m_nActualMoveType", movetype);
+        Utilities.SetStateChanged(pawn, "CBaseEntity", "m_MoveType");
     }
 }

@@ -48,12 +48,11 @@
   "nortv.allowed": " {red}O comando RTV não é permitido.",
   "nominate.notallowed": " {red}O comando de nomeação não é permitido.",
   "set.nextmap": "Definir próximo mapa",
-  "menu.selection.left": "<img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/left.gif' class=''>",
-  "menu.selection.right": "<img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/right.gif' class=''>",
-  "menu.title.prefix": "<font color='green'>",
-  "menu.more.options.below": "<img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/arrow.gif' class=''> <img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/arrow.gif' class=''> <img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/arrow.gif' class=''>",
-  "menu.bottom.text": "           <font color='cyan'>[ WASD - Mover ]</font> <br><font color='purple'>[ <img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/tab.gif' class=''> - Sair ]",
   "time.left": "{green}Tempo restante: {0} min, {1} seg.",
   "rounds.left": "{red}Rodadas restantes: {0}.",
-  "wins.left": "{yellow}Vitórias restantes: {0}."
+  "wins.left": "{yellow}Vitórias restantes: {0}.",
+  "menu.move": "Mover",
+  "menu.select": "Selecionar",
+  "menu.back": "Voltar",
+  "menu.exit": "Sair"
 } 

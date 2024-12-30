@@ -55,5 +55,9 @@
   "menu.bottom.text": "           <font color='cyan'>[ WASD - по меню ]</font> <br><font color='purple'>[ <img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/tab.gif' class=''> - выход ]",
   "time.left": "{green}Осталось времени матча: {0} мин {1} сек.",
   "rounds.left": "{red}Осталось раундов: {0}.",
-  "wins.left": "{yellow}Осталось побед: {0}."
+  "wins.left": "{yellow}Осталось побед: {0}.",
+  "menu.move": "Упр",
+  "menu.select": "Выбор",
+  "menu.back": "Назад",
+  "menu.exit": "Закрыть"
 } 
