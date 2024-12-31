@@ -33,38 +33,75 @@
 </ul>
 
 <h3>Plugin Settings</h3>
-<p>Customize plugin behaviour in <code>csgo/addons/counterstrikesharp/configs/plugins/GG1MapChooser/GG1MapChooser.json</code>:</p>
+<p>Customize plugin behaviour in <code>csgo/addons/counterstrikesharp/configs/plugins/GG1MapChooser/GG1MapChooser.json</code>.<br>Config file is divided into sections to simplify plugin configuration:</p>
+<ul>
+    <li>VoteSettings - describe the process of voting itself.</li>
+    <li>RTVSettings - specific settings for Rock the Vote.</li>
+    <li>WinDrawSettings - voting settings which depends of Rounds Wins</li>
+    <li>TimeLimitSettings - voting settings which depends of Map TimeLimit if set (mp_timelimit cvar)</li>
+    <li>DiscordSettings - to define reporting to Discord behaviour.</li>
+    <li>MenuSettings - menu behaviour.</li>
+    <li>OtherSettings - settings related to different aspects of the plugin.</li>
+</ul>
+<p><b>VoteSettings</b><br>
 <ul>
     <li><code>RememberPlayedMaps</code> - Number of recent maps to exclude from upcoming votes.</li>
-    <li><code>AllowRTV</code> - Allow RTV.</li>
-    <li><code>RTVDelay</code> - Time delay at the start of the map during which RTV is disabled.</li>
-    <li><code>RTVInterval</code> - Cooldown period after a failed vote.</li>
-    <li><code>VotingTime</code> - Duration for players to cast their votes. Can be overridden in console commands.</li>
-    <li><code>EndMapVoteWASDMenu</code> - End of Map Vote in WASD menu (navigation by buttons W (up), A (down), S (previous menu), D (select menu item), "Tab" to exit).</li>
-     <li><code>AllowNominate</code> - Allow Nomination.</li>
-    <li><code>NominationsWASDMenu</code> - Nomination in WASD menu (true) (navigation by buttons W (up), A (down), S (previous menu), D (select menu item), "Tab" to exit) or in Chat Menu (false).</li>
     <li><code>MapsInVote</code> - Number of maps in the voting pool <em>(5 is the recommended value)</em>.</li>
+    <li><code>VotesToWin</code> - Percentage of votes needed to win the vote <em>(0.6 (60%) is the recommended value)</em>.</li>
+    <li><code>AllowNominate</code> - Allow Nomination.</li>
+    <li><code>NominationsWASDMenu</code> - Nomination in WASD menu (true) (navigation by buttons W (up), S (down), A (previous menu), E ("use" command - select menu item), R ("reload" command to exit)) or in Chat Menu (false).</li>
+    <li><code>EndMapVoteWASDMenu</code> - End of Map Vote in WASD menu (true) or in Chat menu (false).</li>
+    <li><code>VotingTime</code> - Duration for players to cast their votes. Can be overridden in console commands.</li>
     <li><code>ExtendMapInVote</code> - Set to true to add the "Extend Map" menu item. It increases the "mp_timelimit" variable.</li>
     <li><code>ExtendMapTimeMinutes</code> - Time in minutes to increase the "mp_timelimit" variable.</li>
-    <li><code>VotesToWin</code> - Percentage of votes needed to win the vote <em>(0.6 (60%) is the recommended value)</em>.</li>
-    <li><code>PrintPlayersChoiceInChat</code> - Print Player's choice to other players in Chat.</li>
-    <li><code>PrintNextMapForAll</code> - Print NextMap command result for all players if true.</li>
-    <li><code>ChangeMapAfterWinDraw</code> - Plugin will Change the Map after the end of the game if a map selected after the vote.</li>
     <li><code>ChangeMapAfterVote</code> - Plugin will Change the Map immediately after the vote.</li>
-    <li><code>ChangeMapAfterTimeLimit</code> - Plugin will Change the Map after the end of the map (accoring to mp_timelimit).</li>
+</ul></p>
+<p><b>RTVSettings</b><br>
+<ul>
+    <li><code>AllowRTV</code> - Allow RTV.</li>
+    <li><code>RTVDelayFromStart</code> - Time delay from the start of the map during which RTV is disabled.</li>
+    <li><code>IntervalBetweenRTV</code> - Cooldown period after a failed vote.</li>
+    <li><code>NoRTVafterRoundsPlayed</code> - Set number of rounds from the map start when rtv can't be called. 0 - to disable this feature</li>
+</ul></p>
+<p><b>WinDrawSettings</b><br>
+<ul>
+    <li><code>VoteDependsOnRoundWins</code> - Turns on/off this section. Set to true if the vote start depends on the number of wins or rounds played.</li>
+    <li><code>TriggerRoundsBeforeEnd</code> - Number of rounds before the end of the match to start the vote. 0 - after the win or last round, 1 - one round before the last win, etc.</li>
+    <li><code>TriggerRoundsBeforEndVoteAtRoundStart</code> - Vote which is triggered in number of rounds before the game end should be executed on RoundStart if true and RoundEnd if false.</li>
+    <li><code>TriggerVoteAtRoundStartSecondsFromStart</code> - Vote which is executed on RoundStart will have this delay in seconds from the RoundStart.</li>
+    <li><code>ChangeMapAfterWinDraw</code> - Plugin will Change the Map after the end of the game if a map selected after the vote.</li>
+</ul></p>
+<p><b>TimeLimitSettings</b><br>
+<ul>
+    <li><code>VoteDependsOnTimeLimit</code> - Turns on/off this section. Set to true if the vote start depends on the time limit to play. The map time is defined in cvar "mp_timelimit"</li>
+    <li><code>TriggerSecondsBeforEnd</code> - Number of seconds before the end of the map to start the vote. Leave enough time for the Vote duration set in "VotingTime"</li>
+    <li><code>ChangeMapAfterTimeLimit</code> - Plugin will Change the Map if it is selected in vote after the end of the time limit.</li>
+    <li><code>VoteNextRoundStartAfterTrigger</code> - if there are several rounds during the time limit, the vote will start on the next RoundStart after being triggered by "TriggerSecondsBeforEnd".</li>
+</ul></p>
+<p><b>DiscordSettings</b><br>
+<ul>
+    <li><code>DiscordWebhook</code> - Discord webhook link to report loaded maps in a Discord channel.</li>
+    <li><code>DiscordMessageMapStart</code> - Reports the map start event to Discord.</li>
+    <li><code>DiscordMessageAfterVote</code> - Reports the vote result to Discord.</li>
+    <li><code>PictureExtension</code> - To display map images in the Discord channel, the link to the folder containing the images can be included in the message template. The specific link to the image is created by combining the workshop map name and the file extension defined by this parameter.</li>
+</ul></p>
+<p><b>MenuSettings</b><br>
+<ul>
+    <li><code>SoundInMenu</code> - Turns on (true) / off (false) sounds in menu for navigation between options, open and close menu.</li>
+    <li><code>FreezePlayerInMenu</code> - If true, a player will be frozen while navigating the menu.</li>
+    <li><code>FreezeAdminInMenu</code> - If true, an admin will be frozen while navigating the menu.</li>
+</ul></p>
+<p><b>OtherSettings</b><br>
+<ul>
+    <li><code>PrintPlayersChoiceInChat</code> - Print Player's menu choice to other players in Chat.</li>
+    <li><code>PrintNextMapForAll</code> - Print NextMap command result for all players if true.</li>
     <li><code>DelayBeforeChangeSeconds</code> - Delay before Plugin will Change the Map after the events: Win/Draw event (ChangeMapAfterWinDraw); Vote ended (ChangeMapAfterVote)</li>
     <li><code>VoteStartSound</code> - Sound played to players when the map vote starts.</li>
     <li><code>RandomMapOnStart</code> - Enable changing to a random map on server restart.</li>
     <li><code>RandomMapOnStartDelay</code> - Delay in seconds before changing to a random map on server restart.</li>
     <li><code>LastDisconnectedChangeMap</code> - Switch to a random map after the last player disconnects.</li>
     <li><code>WorkshopMapProblemCheck</code> - Checks whether the voted or admin-chosen map is loaded and if not (in case of problems with the workshop map) loads a random map.</li>
-    <li><code>VoteDependsOnRoundWins</code> - Set to true if the vote start depends on the number of wins or rounds played.</li>
-    <li><code>TriggerRoundsBeforeEnd</code> - Number of rounds before the end of the match to start the vote. 0 - after the win or last round, 1 - one round before the last win, etc.</li>
-    <li><code>TriggerRoundsBeforEndVoteAtRoundStart</code> - Vote is triggered in number of rounds before the game end and executed on RoundStart if true and RoundEnd if false.</li>
-    <li><code>VoteDependsOnTimeLimit</code> - Set to true if the vote start depends on the time limit to play.</li>
-    <li><code>TriggerSecondsBeforEnd</code> - Number of seconds before the end of the map to start the vote. The map time is defined in cvar "mp_timelimit"</li>
-    <li><code>DiscordWebhook</code> - Discord webhook link to report loaded maps in a Discord channel.</li> 
-</ul>
+</ul></p>
 
 <h3>Discord message Configuration</h3>
 <p>Define the text you want to display in <code>csgo/addons/counterstrikesharp/configs/plugins/GG1MapChooser/NextMapMessage.json</code>:</p>
@@ -72,7 +109,7 @@
     <li>The config file will be automatically created if not exists.</li>
     <li>You can modify or localize the text: <code>content = "Next map: "</code></li>
     <li>If you want to display map pictures in the messages you need to specifying the resource’s address: <code>url = "https://example.com/folder/with/mapimages/"</code></li>
-    <li>Map images must follow the naming convention <mapname>.jpg, matching exactly with the map names used in the Workshop and in GGMCmaps.json</li>
+    <li>Map images must follow the naming convention <mapname> plus extension defined in "PictureExtension", matching exactly with the map names used in the Workshop and in GGMCmaps.json</li>
 </ul>
 
 <h2>Usage</h2>
@@ -125,8 +162,8 @@
 <h2>Admin Commands</h2>
 <ul>
     <li><strong>Map Change:</strong> Use <code>css_maps</code> or <code>!maps</code> to open a menu with options: simply change the map (manually choose or automatic selection); start a vote with automatic or custom selections; start a vote to see if players agree to change the map; set the next map.</li>
-    <li>Players or admins confirm WASD menu options using the “Jump” button (typically “space”) when in a team, while spectators use the “move right” button. Due to technical constraints, the “jump” button doesn’t function in spectator mode.</li>
-    <li><strong>Quick Map Selection:</strong> Use <code>ggmap &lt;partofmapname&gt;</code> to quickly find and switch to a map using a partial name match.</li>
+    <li>Players or admins confirm WASD menu options using the “E” button (“use” command).</li>
+    <li><strong>Quick Map Selection:</strong> Use <code>ggmap &lt;partofmapname&gt;</code> to quickly find and switch to a map using a partial name match. Or you can use <code>ggmap &lt;exactmapname&gt;</code> as aa server command to change a map from external scripts or plugins.</li>
 </ul>
 
 <h3>External Controls:</h3>
@@ -152,6 +189,8 @@
     <li>Even if a map ID is set for the workshop map, it is important to have the name the maps exactly the same as it is in the Workshop. Otherwise, you won't be able to use the WorkshopMapProblemCheck feature to check if the requested map is loaded or if it is missing in the workshop, because the map owner can delete the map at any time.</li>
 </ul>
 
+<h2>Plugin Compilation</h2>
+<p>To compile the plugin by yourself please download <a href="https://github.com/ssypchenko/ggmcAPI">the APi part</a>.</p>
 <h2>Plugin APIs</h2>
 <p>Plugin expose to other developers these functions via API:</p>
 <ul>
@@ -162,7 +201,7 @@
     </li>
     <li>WASD Menu API:
       <ul>
-        <li><code>public IWasdMenu CreateMenu(string title = "");</code> - create new menu object;</li>
+        <li><code>public IWasdMenu CreateMenu(string title = "", bool freezePlayer = true);</code> - create new menu object;</li>
         <li><code>public void OpenMainMenu(CCSPlayerController? player, IWasdMenu? menu);</code> - open the menu as main menu;</li>
         <li><code>public void CloseMenu(CCSPlayerController? player);</code> - close all menus;</li>
         <li><code>public void OpenSubMenu(CCSPlayerController? player, IWasdMenu? menu);</code> - open menu as submenu;</li>
@@ -176,6 +215,7 @@
 
 <h2>Credits</h2>
 <p>Thank you to <a href="https://forums.alliedmods.net/showthread.php?t=134190">UMC Mapchooser</a> for the main ideas.</p>
+<p>Special thanks to <a href="https://github.com/T3Marius/T3Menu-API">T3Marius</a> for WASD menu ideas and design.
 <p>Thanks to:
 <ul>
 <li>crashzk for the Portuguese translation,</li>
