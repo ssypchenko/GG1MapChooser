@@ -28,13 +28,14 @@ using CounterStrikeSharp.API.Modules.Utils;
 using CounterStrikeSharp.API.Modules.Listeners;
 using MapChooserAPI;
 using Microsoft.VisualBasic;
+using McMaster.NETCore.Plugins;
 
 namespace MapChooser;
 
 public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
 {
     public override string ModuleName => "GG1_MapChooser";
-    public override string ModuleVersion => "v1.6.0";
+    public override string ModuleVersion => "v1.6.1";
     public override string ModuleAuthor => "Sergey";
     public override string ModuleDescription => "Map chooser, voting, rtv, nominate, etc.";
     public MCCoreAPI MCCoreAPI { get; set; } = null!;
@@ -42,7 +43,6 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     public static PluginCapability<IWasdMenuManager> WasdMenuManagerCapability = new ("ggmc:wasdmanager");
     public readonly IStringLocalizer<MapChooser> _localizer;
     public MaxRoundsManager roundsManager;
-//    public TimerManager timeManager;
     private TimerManager2 _timerManager;
     private Timer? timersLog = null;
     public WebhookService webhookService;
@@ -51,7 +51,6 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     {
         _localizer = localizer;
         roundsManager = new(this);
-//        timeManager = new(this);
         _timerManager = new(this);
         webhookService = new(this);
         wASDMenu = new(this);
@@ -70,25 +69,15 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             Logger.LogWarning("ChangeMapAfterWinDraw may not work because ChangeMapAfterVote set true");
         }
         roundsManager.InitialiseMap();
-//        roundsManager.CheckConfig();
         if (Config.TimeLimitSettings.VoteDependsOnTimeLimit)
         {
-/*            var TimeLimit = ConVar.Find("mp_timelimit");
-            var TimeLimitValue = TimeLimit?.GetPrimitiveValue<float>() ?? 0;
-            if (TimeLimitValue < 1)
-            {
-                Logger.LogError($"VoteDependsOnTimeLimit set true, but cvar mp_timelimit set less than 1. Plugin can't work correctly with these settings.");
-            } */
             if (Config.TimeLimitSettings.TriggerSecondsBeforeEnd < Config.VoteSettings.VotingTime)
             {
                 Config.TimeLimitSettings.TriggerSecondsBeforeEnd = Config.VoteSettings.VotingTime + 1;
                 Logger.LogInformation($"VoteDependsOnTimeLimit: TriggerSecondsBeforeEnd updates to {Config.VoteSettings.VotingTime + 1} which is minimum value for VotingTime {Config.VoteSettings.VotingTime} in config.");
-            } /*
-            if (Config.TimeLimitSettings.TriggerSecondsBeforeEnd < (TimeLimitValue * 60))
-            {
-                Logger.LogError($"VoteDependsOnTimeLimit set true, but TriggerSecondsBeforEnd is more than cvar mp_timelimit value. Plugin can't work correctly with these settings.");
-            } */
+            }
         }
+        wASDMenu.ReadButtons();
     }
     public bool mapChangedOnStart = false; 
     private Random random = new();
@@ -102,9 +91,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     private int mapstotal = 0;
     private bool canVote { get; set; } = false;
     private bool canRtv { get; set; } = false;
-    private int rtv_can_start { get; set; } = 0;
     private int rtv_need_more { get; set; }
-//    private Timer? rtvTimer = null;
     private DateTime rtvCooldownStartTime;
     private int rtvCoolDownDuration;
     private int rtvRestartProblems = 0;
@@ -225,9 +212,6 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                 }
             }
         }
-/*        AddTimer(2.0f, () => {
-            GameRules = GetGameRules();
-        }, TimerFlags.STOP_ON_MAPCHANGE); */
     }
     public override void Unload(bool hotReload)
     {
@@ -406,12 +390,6 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                 AddTimer(1.0f, () => {
                     changeRequested = AddTimer((float)Config.OtherSettings.RandomMapOnStartDelay, Timer_ChangeMapOnEmpty, TimerFlags.STOP_ON_MAPCHANGE);
                 });
-                
-/*                if (changeRequested == null)
-                {
-                    Console.WriteLine("*************** Could not create timer for map change on server start");
-                    Logger.LogError("Could not create timer for map change on server start");
-                } */
             }
             if (Config.RTVSettings.AllowRTV && Config.RTVSettings.RTVDelayFromStart > 0)
             {
@@ -503,7 +481,6 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         if (canVote)
         {
             roundsManager.UpdateMaxRoundsValue();
-//            roundsManager.CheckConfig();
             if (!IsVoteInProgress && !roundsManager.WarmupRunning && roundsManager.CheckMaxRounds() && !_runVoteRoundEnd)
             {
                 Logger.LogInformation("Time to vote because of CheckMaxRounds");
@@ -622,18 +599,6 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                 voteEndTimer = null;
             }
 
-/*            if (voteEndTimer != null)
-            {
-                
-                timeManager.EnqueueOperation(async () => 
-                {
-                    bool success = await KillTimer(voteEndTimer);
-                    if (success)
-                    {
-                        voteEndTimer = null;
-                    }
-                });
-            } */
             if (!string.IsNullOrEmpty(_roundEndMap))
             {
                 DoMapChange(_roundEndMap, SSMC_ChangeMapTime.ChangeMapTime_Now);
@@ -682,17 +647,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                     Logger.LogError("Error killing _timeLimitMapChangeTimer timer");
                 });
             }
-            _timeLimitMapChangeTimer = null;
-            
-            
-/*            timeManager.EnqueueOperation(async () => 
-            {
-                bool success = await KillTimer(_timeLimitMapChangeTimer);
-                if (success)
-                {
-                    _timeLimitMapChangeTimer = null;
-                }
-            }); */
+            _timeLimitMapChangeTimer = null;            
         }
         if (canVote)
         {
@@ -795,11 +750,6 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         maplist = Maps_from_List.Keys.ToList();
         mapstotal = maplist.Count;
         if (mapstotal > 0) {
-/*            Logger.LogInformation("Maps loaded:");
-            foreach (var mapcheck in Maps_from_List)
-            {
-                Logger.LogInformation($"{mapcheck.Key}: {mapcheck.Value.Weight}");
-            }            */
             return true;
         }
         return false;
@@ -902,7 +852,6 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         else
         {
             string mapname = mapChange;
-    //        _selectedMap = null;
             PrintToServerCenter("mapchange.to", mapname);
             PrintToServerChat("nextmap.info", mapname);
             Console.WriteLine($"Map is changing to {mapname}");
@@ -921,11 +870,6 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                     Logger.LogInformation($"Set NextLevel to {mapname}");
                 }
                 _roundEndMap = mapname;
-    /*            if (endTimer == null)
-                {
-                    EmergencyMap = mapname;
-                    endTimer = AddTimer(10.0f, EmergencyChange, TimerFlags.STOP_ON_MAPCHANGE);
-                } */
             }
             else 
             {
@@ -957,13 +901,6 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                 if (Config.TimeLimitSettings.VoteDependsOnTimeLimit)
                 {
                     var secondsLeft = (int)TimeLimitValue * 60 - (int)(DateTime.Now - timeLimitStartEventTime).TotalSeconds;
-//                    var secondsPassed = timelimitOld * 60 - Config.TimeLimitSettings.TriggerSecondsBeforeEnd + Config.VoteSettings.VotingTime;                        
-/*                    float newTrigger = Config.TimeLimitSettings.TriggerSecondsBeforeEnd;
-                    
-                    if (newTimeLimit * 60 - Config.TimeLimitSettings.TriggerSecondsBeforeEnd < secondsPassed) //Time left to play after new timelimit is less than TriggerSecondsBeforEnd, but we need to vote again
-                    {
-                        newTrigger = (newTimeLimit * 60 - secondsPassed) / 2;
-                    } */
                     float newVoteDelay = secondsLeft - Config.TimeLimitSettings.TriggerSecondsBeforeEnd;
                     if (newVoteDelay <= 0)
                     {
@@ -984,20 +921,6 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                         });
                     }
                     _timeLimitMapChangeTimer = null;
-//                    SimpleKillTimer(_timeLimitMapChangeTimer);
-//                    _timeLimitMapChangeTimer = null;
-
-/*                    if (Config.TimeLimitSettings.ChangeMapAfterTimeLimit && _timeLimitMapChangeTimer != null)
-                    {
-                        timeManager.EnqueueOperation(async () => 
-                        {
-                            bool success = await KillTimer(_timeLimitMapChangeTimer);
-                            if (success)
-                            {
-                                _timeLimitMapChangeTimer = null;
-                            }
-                        });
-                    } */
                 }
             }
             else
@@ -1017,7 +940,6 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             if (Maps_from_List.TryGetValue(mapname, out var mapInfo))
             {
                 MapToChange = mapname;
-//                MapIsChanging = false;
                 
                 if (mapInfo.WS)
                 {
@@ -1190,7 +1112,6 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             Logger.LogInformation("[GGMC]: Could not create map menu, no valid maps available.");
             return null!;
         }
-//        MapsMenu.PostSelectAction = PostSelectAction.Close;
         return MapsMenu;
     }
 
@@ -1583,7 +1504,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         if (wasdmenu)
         {
             ConfigMapsInVote = Config.VoteSettings.MapsInVote;
-            GlobalWASDMenu = wASDMenu.manager.CreateMenu(_localizer["choose.map"], Config.MenuSettings.FreezePlayerInMenu);
+            GlobalWASDMenu = wASDMenu.manager.CreateMenu("", Config.MenuSettings.FreezePlayerInMenu); //_localizer["choose.map"]
             if (GlobalWASDMenu == null)
             {
                 Logger.LogError($"GlobalWASDMenu is null but should bot be, something is wrong");
@@ -1996,7 +1917,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         }
         if (Config.RTVSettings.AllowRTV)
         {
-//            if (rtvTimer != null) //Работает таймер задержки
+            //Работает таймер задержки
             if (_timerManager.IsTimerRunning("rtvTimer"))
             {
                 int remainingTime = rtvCoolDownDuration - (int)(DateTime.Now - rtvCooldownStartTime).TotalSeconds;
@@ -2034,9 +1955,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                 }
                 catch (Exception)
                 {
-/*                    Server.NextFrame(() => {
-                        Logger.LogError($"RTV: Can't GetGameRules: {ex}. Skip number of rounds played check");
-                    }); */
+
                 }
             }
             if (players[caller.Slot] != null)
@@ -2157,7 +2076,6 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         }
         else if (GlobalWASDMenu != null)
         {
-//            var manager = GetMenuManager();
             wASDMenu.manager.OpenMainMenu(caller, GlobalWASDMenu);
         }
         else
@@ -2212,22 +2130,12 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             caller.PrintToChat(Localizer["vote.inprogress"]);
             return;
         }
-/*        var manager = GetMenuManager();
-        if(manager == null)
-            return; */
         IWasdMenu menu = wASDMenu.manager.CreateMenu(Localizer["maps.menu"], Config.MenuSettings.FreezeAdminInMenu);
         menu.Add(Localizer["change.map"], AdminChangeMapHandle); // Simply change the map
         menu.Add(Localizer["votefor.map"], AdminStartVotesMapHandle); // Start voting for map
         menu.Add(Localizer["vote.changeornot"], VotesForChangeMapHandle); // Start voting to change map or not
         menu.Add(Localizer["set.nextmap"], AdminSetNextMapHandle); // Choose and set next map
         wASDMenu.manager.OpenMainMenu(caller, menu);
-
-/*        var MapsMenu = new ChatMenu(Localizer["maps.menu"]); 
-        MapsMenu.AddMenuOption(Localizer["change.map"], AdminChangeMapHandle); // Simply change the map
-        MapsMenu.AddMenuOption(Localizer["votefor.map"], AdminStartVotesMapHandle); // Start voting for map
-        MapsMenu.AddMenuOption(Localizer["vote.changeornot"], VotesForChangeMapHandle); // Start voting to change map or not
-//        MapsMenu.PostSelectAction = PostSelectAction.Close;
-        MenuManager.OpenChatMenu(caller, MapsMenu); */
     }
 
     [ConsoleCommand("ggmc_mapvote_start", "Start map vote.")]
@@ -2540,16 +2448,6 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                 });
             }
             voteTimer = null;
-            
-            
-/*            timeManager.EnqueueOperation(async () => 
-            {
-                bool success = await KillTimer(voteTimer);
-                if (success)
-                {
-                    voteTimer = null;
-                }
-            }); */
         }
     }
     private void TryNominate(CCSPlayerController player, string map)
@@ -2703,16 +2601,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                 IsVoteInProgress = false;
                 _roundEndMap = _selectedMap;
                 DoMapChange(_selectedMap, changeTime);
-//                Logger.LogInformation("DoMapChange finished");
                 VoteChangeTimerStart(changeTime);
-/*                try
-                {
-                    DoMapChange(_selectedMap, changeTime);
-                }
-                catch (Exception ex)
-                {
-                    Server.NextFrame( () => {Logger.LogError($"Failed to do MapChange: {ex.Message}");});
-                } */
 
                 return;
             }
@@ -2805,29 +2694,12 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             rtvCoolDownDuration = interval;
             rtvCooldownStartTime = DateTime.Now;
         }
-/*        if (rtvTimer == null && interval > 0)
-        {
-            canRtv = false;
-            rtvCoolDownDuration = interval;
-            rtvCooldownStartTime = DateTime.Now;
-
-            rtvTimer = AddTimer((float)interval, Handle_RTVTimer, TimerFlags.STOP_ON_MAPCHANGE);
-            Logger.LogInformation($"rtv cooldown on, rtv is not allowed");
-        }
-        else
-        {
-            Logger.LogWarning($"MakeRTVTimer: rtvTimer is not null or interval ({interval})");
-        } */
     }
     private void Handle_RTVTimer()
     {
         canRtv = true;
-//        rtvTimer = null;
         rtvCoolDownDuration = 0;
         Logger.LogInformation("rtv cooldown off, rtv is allowed");
-/*        Server.NextFrame(() => {
-            Logger.LogInformation("rtv cooldown off, rtv is allowed");
-        }); */
     }
     private bool IsRTVThreshold(bool log = true)
     {
@@ -2862,8 +2734,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             double percent_now = (double)rtvs / total;
             
             rtv_need_more = (int)Math.Ceiling((Config.VoteSettings.VotesToWin - percent_now) * total);
-            
-            
+                    
             if ((total == 1 && rtvs == 1) || rtv_need_more <= 0)
             {
                 Logger.LogInformation($"Successful rtv %: {percent_now}, {rtvs} out of {total}");
@@ -3049,41 +2920,10 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     {
         SimpleKillTimer(_timeLimitTimer);
         _timeLimitTimer = AddTimer(duration, TimeLimitTimerHandle, TimerFlags.STOP_ON_MAPCHANGE);
-/*        lock (_timerLock)
-        {
-            if (_timeLimitTimer != null)
-            {
-                timeManager.EnqueueOperation(async () => 
-                {
-                    bool success = await KillTimer(_timeLimitTimer);
-                    if (success)
-                    {
-                        _timeLimitTimer = null; // Ensure it's null before recreating
-                        _timeLimitTimer = AddTimer(duration, callback, TimerFlags.STOP_ON_MAPCHANGE);
-                    }
-                });
-            }
-            else
-            {
-                _timeLimitTimer = AddTimer(duration, callback, TimerFlags.STOP_ON_MAPCHANGE);
-            }
-        } */
     }
     private void KillRTVtimer()
     {
         _timerManager.StopTimer("rtvTimer");
-/*        if (rtvTimer != null)
-        {
-            try
-            {
-                rtvTimer.Kill();
-            }
-            catch (System.Exception)
-            {
-
-            }
-        }
-        rtvTimer = null; */
         canRtv = true;
         rtvCoolDownDuration = 0;
         CleanRTVArrays();
@@ -3098,7 +2938,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             });
         }
     }
-    public async Task<bool> KillTimer(Timer? parameter)
+/*    public async Task<bool> KillTimer(Timer? parameter)
     {
         Timer? timerToKill = parameter;
         if (timerToKill != null)
@@ -3125,7 +2965,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             });
         }
         return true;
-    }
+    } */
     public enum Nominations
     {
         Nominated = 0,
@@ -3225,9 +3065,41 @@ public class WASDMenu
     public WasdManager manager = new();  
     public static IStringLocalizer? Localizer = null;
     public static readonly Dictionary<int, WasdMenuPlayer> Players = new();
-    private static readonly ConcurrentDictionary<CCSPlayerController, (PlayerButtons Button, DateTime LastPress, int RepeatCount)> ButtonHoldState = new();
+    private static readonly ConcurrentDictionary<int, (PlayerButtons Button, DateTime LastPress, int RepeatCount)> ButtonHoldState = new();
     private const float InitialDelay = 0.5f;
     private const float RepeatDelay = 0.1f;
+    private PlayerButtons scrollUp;
+    private PlayerButtons scrollDown;
+    private PlayerButtons choose;
+    private PlayerButtons back;
+    private PlayerButtons exit;
+    public void ReadButtons()
+    {
+        if (ButtonMapping.TryGetValue(Plugin.Config.MenuSettings.ScrollUp, out var scrollUpButton))
+            scrollUp = scrollUpButton;
+        else
+            scrollUp = PlayerButtons.Forward;
+
+        if (ButtonMapping.TryGetValue(Plugin.Config.MenuSettings.ScrollDown, out var scrollDownButton))
+            scrollDown = scrollDownButton;
+        else
+            scrollDown = PlayerButtons.Back;
+
+        if (ButtonMapping.TryGetValue(Plugin.Config.MenuSettings.Choose, out var chooseButton))
+            choose = chooseButton;
+        else
+            choose = PlayerButtons.Use;
+
+        if (ButtonMapping.TryGetValue(Plugin.Config.MenuSettings.Back, out var backButton))
+            back = backButton;
+        else
+            back = PlayerButtons.Moveleft;
+
+        if (ButtonMapping.TryGetValue(Plugin.Config.MenuSettings.Exit, out var exitButton))
+            exit = exitButton;
+        else
+            exit = PlayerButtons.Reload;
+    }
     public void Load(bool hotReload)
     {
         var wasdMenuManager = new WasdManager();
@@ -3283,19 +3155,17 @@ public class WASDMenu
             var controller = player.player!;       
             PlayerButtons currentButtons = controller.Buttons;
 
-            if (!ButtonHoldState.TryGetValue(controller, out var holdState))
+            if (!ButtonHoldState.TryGetValue(controller.Slot, out var holdState))
             {
                 holdState = ((PlayerButtons)0, DateTime.MinValue, 0);
             }
-
-            bool buttonHandled = false;
 
             if (currentButtons != 0)
             {
                 if (holdState.Button != currentButtons)
                 {
-                    ButtonHoldState[controller] = (currentButtons, now, 0);
-                    buttonHandled = HandleButton(player, currentButtons);
+                    ButtonHoldState[controller.Slot] = (currentButtons, now, 0);
+                    HandleButton(player, currentButtons);
                 }
                 else
                 {
@@ -3305,15 +3175,15 @@ public class WASDMenu
                         int repeatCount = (int)((totalSeconds - InitialDelay) / RepeatDelay);
                         if (repeatCount > holdState.RepeatCount)
                         {
-                            buttonHandled = HandleButton(player, currentButtons);
-                            ButtonHoldState[controller] = (holdState.Button, holdState.LastPress, repeatCount);
+                            HandleButton(player, currentButtons, repeatCount);
+                            ButtonHoldState[controller.Slot] = (holdState.Button, holdState.LastPress, repeatCount);
                         }
                     }
                 }
             }
             else
             {
-                ButtonHoldState.TryRemove(controller, out _);
+                ButtonHoldState.TryRemove(controller.Slot, out _);
             }
 
             player.Buttons = currentButtons;
@@ -3321,39 +3191,59 @@ public class WASDMenu
                 player.player.PrintToCenterHtml(player.CenterHtml);
         }
     }
-    private bool HandleButton(WasdMenuPlayer player, PlayerButtons button)
+    private void HandleButton(WasdMenuPlayer player, PlayerButtons button, int repeat = 0)
     {
-        bool buttonHandled = false;
-
-        if ((player.Buttons & PlayerButtons.Forward) == 0 && (button & PlayerButtons.Forward) != 0)
+        if ((button & scrollUp) != 0 && ((player.Buttons & scrollUp) == 0 || repeat > 0))
         {
             player.ScrollUp();
-            buttonHandled = true;
         }
-        else if((player.Buttons & PlayerButtons.Back) == 0 && (button & PlayerButtons.Back) != 0)
+        else if((button & scrollDown) != 0 && ((player.Buttons & scrollDown) == 0 || repeat > 0))
         {
             player.ScrollDown();
-            buttonHandled = true;
         }
-        else if((player.Buttons & PlayerButtons.Use) == 0 &&(button & PlayerButtons.Use) != 0)
+        else if((button & choose) != 0 && ((player.Buttons & choose) == 0 || repeat > 0))
         {
             player.Choose();
-            buttonHandled = true;
         } 
-        else if ((player.Buttons & PlayerButtons.Moveleft) == 0 && (button & PlayerButtons.Moveleft) != 0)
+        else if ((button & back) != 0 && ((player.Buttons & back) == 0 || repeat > 0))
         {
             player.CloseSubMenu();
-            buttonHandled = true;
         }
-        else if ((player.Buttons & PlayerButtons.Reload) == 0 && (button & PlayerButtons.Reload) != 0)
+        else if ((button & exit) != 0 && ((player.Buttons & exit) == 0 || repeat > 0))
         {
             player.OpenMainMenu(null);
-            buttonHandled = true;
         }
-
-        return buttonHandled;
     }
-
+    public static readonly Dictionary<string, PlayerButtons> ButtonMapping = new()
+    {
+        { "Alt1", PlayerButtons.Alt1 },
+        { "Alt2", PlayerButtons.Alt2 },
+        { "Attack", PlayerButtons.Attack },
+        { "Attack2", PlayerButtons.Attack2 },
+        { "Attack3", PlayerButtons.Attack3 },
+        { "Bullrush", PlayerButtons.Bullrush },
+        { "Cancel", PlayerButtons.Cancel },
+        { "Duck", PlayerButtons.Duck },
+        { "Grenade1", PlayerButtons.Grenade1 },
+        { "Grenade2", PlayerButtons.Grenade2 },
+        { "Space", PlayerButtons.Jump },
+        { "Left", PlayerButtons.Left },
+        { "W", PlayerButtons.Forward },
+        { "A", PlayerButtons.Moveleft },
+        { "S", PlayerButtons.Back },
+        { "D", PlayerButtons.Moveright },
+        { "E", PlayerButtons.Use },
+        { "R", PlayerButtons.Reload },
+        { "F", (PlayerButtons)0x800000000 },
+        { "Shift", PlayerButtons.Speed },
+        { "Right", PlayerButtons.Right },
+        { "Run", PlayerButtons.Run },
+        { "Walk", PlayerButtons.Walk },
+        { "Weapon1", PlayerButtons.Weapon1 },
+        { "Weapon2", PlayerButtons.Weapon2 },
+        { "Zoom", PlayerButtons.Zoom },
+        { "Tab", (PlayerButtons)8589934592 }
+    };
 }
 public class MCConfig : BasePluginConfig 
 {
@@ -3400,7 +3290,7 @@ public class VoteSettings
 
     /* End of Map Vote in WASD menu */
     [JsonPropertyName("EndMapVoteWASDMenu")]
-    public bool EndMapVoteWASDMenu { get; set; } = false;
+    public bool EndMapVoteWASDMenu { get; set; } = true;
 
     /* Time in seconds to wait while players make their choice */
     [JsonPropertyName("VotingTime")]
@@ -3503,6 +3393,16 @@ public class WASDMenuSettings
     /* Freeze player when his menu is opened because navigatin in menu use standard moving buttons  */
     [JsonPropertyName("FreezeAdminInMenu")]
     public bool FreezeAdminInMenu { get; set; } = true;
+    [JsonPropertyName("ScrollUp")]
+    public string ScrollUp { get; set; } = "W";
+    [JsonPropertyName("ScrollDown")]
+    public string ScrollDown { get; set; } = "S";
+    [JsonPropertyName("Choose")]
+    public string Choose { get; set; } = "E";
+    [JsonPropertyName("Back")]
+    public string Back { get; set; } = "A";
+    [JsonPropertyName("Exit")]
+    public string Exit { get; set; } = "R";
 }
 public class OtherSettings
 {    
@@ -3965,32 +3865,21 @@ public class TimerManager2
     {
         if (_timers.Count == 0)
         {
-//            _plugin.Logger.LogInformation("No timers are currently managed.");
             return;
         }
 
-//        bool hasRunningTimers = false;
-
-//        _plugin.Logger.LogInformation("Current Timer Status:");
         var timeCheck = DateTime.Now;
         foreach (var timer in _timers.Values)
         {
             if (timer.IsRunning)
             {
-//                hasRunningTimers = true;
                 if (timer.EndTime < timeCheck)
                 {
                     _plugin.Logger.LogError($"Timer {timer.Name} works longer than its time :(");
                     timer.Force();
                 }
             }
-//            _plugin.Logger.LogInformation($"Timer '{timer.Name}': {(timer.IsRunning ? "Running" : "Stopped")}");
         }
-
-/*        if (!hasRunningTimers)
-        {
-            _plugin.Logger.LogInformation("No timers are currently running.");
-        } */
     }
 }
 public class MCCoreAPI : MCIAPI

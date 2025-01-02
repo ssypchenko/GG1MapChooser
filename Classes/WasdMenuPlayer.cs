@@ -32,6 +32,8 @@ public class WasdMenuPlayer
     string strMove = "Move";
     string strExit = "Exit";
     string strBack = "Back";
+    string bottomMenuLine = "";
+    string bottomSubMenuLine = "";
     public void UpdateLocalization()
     {
         if (player != null && Localizer != null)
@@ -43,6 +45,8 @@ public class WasdMenuPlayer
                 strExit = Localizer["menu.exit"];
                 strBack = Localizer["menu.back"];
             }
+            bottomMenuLine = $"<font color='#ff3333' class='fontSize-sm'>{strMove}:<font color='#f5a142'>[{_plugin.Config.MenuSettings.ScrollUp}/{_plugin.Config.MenuSettings.ScrollDown}]<font color='#FFFFFF'>|<font color='#ff3333' class='fontSize-m'>{strSelect}:<font color='#f5a142'>[{_plugin.Config.MenuSettings.Choose}]<font color='#FFFFFF'>|<font color='#ff3333'>{strExit}:<font color='#f5a142'>[{_plugin.Config.MenuSettings.Exit}]</font><br>";
+            bottomSubMenuLine = $"<font color='#ff3333' class='fontSize-sm'>{strSelect}:<font color='#f5a142'>[{_plugin.Config.MenuSettings.Choose}]<font color='#FFFFFF'>|<font color='#ff3333' class='fontSize-m'>{strBack}:<font color='#f5a142'>[{_plugin.Config.MenuSettings.Back}]<font color='#FFFFFF'>|<font color='#ff3333'>{strExit}:<font color='#f5a142'>[{_plugin.Config.MenuSettings.Exit}]</font><br>";
         }
     }
     public void OpenMainMenu(WasdMenu? menu)
@@ -248,11 +252,13 @@ public class WasdMenuPlayer
 
         if (MenuStart?.Value.Parent!.Prev != null)
         {
-            builder.AppendLine($"<font color='#ff3333' class='fontSize-sm'>{strSelect}:<font color='#f5a142'>[E]<font color='#FFFFFF'>|<font color='#ff3333' class='fontSize-m'>{strBack}:<font color='#f5a142'>[A]<font color='#FFFFFF'>|<font color='#ff3333'>{strExit}:<font color='#f5a142'>[R]</font><br>");
+//            builder.AppendLine($"<font color='#ff3333' class='fontSize-sm'>{strSelect}:<font color='#f5a142'>[E]<font color='#FFFFFF'>|<font color='#ff3333' class='fontSize-m'>{strBack}:<font color='#f5a142'>[A]<font color='#FFFFFF'>|<font color='#ff3333'>{strExit}:<font color='#f5a142'>[R]</font><br>");
+            builder.AppendLine(bottomSubMenuLine);
         }
         else
         {
-            builder.AppendLine($"<font color='#ff3333' class='fontSize-sm'>{strMove}:<font color='#f5a142'>[W/S]<font color='#FFFFFF'>|<font color='#ff3333' class='fontSize-m'>{strSelect}:<font color='#f5a142'>[E]<font color='#FFFFFF'>|<font color='#ff3333'>{strExit}:<font color='#f5a142'>[R]</font><br>");
+//            builder.AppendLine($"<font color='#ff3333' class='fontSize-sm'>{strMove}:<font color='#f5a142'>[W/S]<font color='#FFFFFF'>|<font color='#ff3333' class='fontSize-m'>{strSelect}:<font color='#f5a142'>[E]<font color='#FFFFFF'>|<font color='#ff3333'>{strExit}:<font color='#f5a142'>[R]</font><br>");
+            builder.AppendLine(bottomMenuLine);
         }
         builder.AppendLine("</div>");
 
