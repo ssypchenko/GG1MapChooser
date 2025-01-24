@@ -124,6 +124,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     private List<string> _playedMaps = new List<string>();
     public string MapToChange = ""; 
     private readonly object _timerLock = new object();
+    public CCSGameRules? gameRules;
     public override void Load(bool hotReload) 
     {
         Logger.LogInformation($"{ModuleVersion}");
@@ -430,7 +431,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             Console.WriteLine(NoMapcycle);
             Logger.LogError(NoMapcycle);
         }
-        Logger.LogInformation("OnMapstart finished");
+        gameRules = null;
     }
     private void OnMapEnd()
     {
@@ -1939,24 +1940,18 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             }
             if (Config.RTVSettings.NoRTVafterRoundsPlayed > 0)
             {
-                CCSGameRules GameRules = null!;
-                try
+                if (gameRules == null)
                 {
-                    GameRules = GetGameRules();
-                    if (GameRules != null)
-                    {
-                        if (GameRules.TotalRoundsPlayed > Config.RTVSettings.NoRTVafterRoundsPlayed)
-                        {
-                            caller.PrintToChat(Localizer["nortv.now"]);
-                            Logger.LogInformation("Skipped rtv call because played more rounds that allowed for rtv.");
-                            return;
-                        }
-                    }
+                    InitGameRules();
                 }
-                catch (Exception)
+                
+                if (gameRules?.TotalRoundsPlayed > Config.RTVSettings.NoRTVafterRoundsPlayed)
                 {
-
+                    caller.PrintToChat(Localizer["nortv.now"]);
+                    Logger.LogInformation("Skipped rtv call because played more rounds that allowed for rtv.");
+                    return;
                 }
+    
             }
             if (players[caller.Slot] != null)
             {
@@ -3049,9 +3044,19 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             File.WriteAllTextAsync(filePath, jsonString);
         }
     }
-    private static CCSGameRules GetGameRules()
+    public void InitGameRules()
     {
-        return CounterStrikeSharp.API.Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").First().GameRules!;
+        CCSGameRulesProxy? gameRulesProxy;
+        try
+        {
+            gameRulesProxy = CounterStrikeSharp.API.Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault();
+        }
+        catch (System.Exception)
+        {
+            return;
+        }
+        if (gameRulesProxy != null)
+            gameRules = gameRulesProxy.GameRules;
     }
 }
 public class WASDMenu 
@@ -3149,6 +3154,14 @@ public class WASDMenu
 
     public void OnTick()
     {
+        if (Plugin.gameRules == null)
+        {
+            Plugin.InitGameRules();
+        }
+        else
+        {
+            Plugin.gameRules.GameRestart = Plugin.gameRules.RestartRoundTime < Server.CurrentTime;
+        }
         DateTime now = DateTime.Now;
         foreach (var player in Players.Values.Where(p => p.MainMenu != null))
         {
@@ -3498,17 +3511,13 @@ public class MaxRoundsManager
     {
         get
         {
-            CCSGameRules GameRules = null!;
-            try
+            if (Plugin.gameRules == null)
             {
-                GameRules = GetGameRules();
+                Plugin.InitGameRules();
             }
-            catch (Exception)
-            {
-//                Plugin.Logger.LogError($"Can't GetGameRules: {ex}.");
-                return false;
-            }
-            return GameRules?.WarmupPeriod ?? false;
+            if (Plugin.gameRules != null)
+                return Plugin.gameRules.WarmupPeriod;
+            return false; 
         }
     }
     public void InitialiseMap()
@@ -3551,17 +3560,11 @@ public class MaxRoundsManager
     {
         get
         {
-            CCSGameRules GameRules = null!;
-            try
+            if (Plugin.gameRules == null)
             {
-                GameRules = GetGameRules();
+                Plugin.InitGameRules();
             }
-            catch (Exception)
-            {
-//                Plugin.Logger.LogError($"Can't GetGameRules: {ex}.");
-                return 0;
-            }
-            var played = MaxRoundsValue - (GameRules != null ? GameRules.TotalRoundsPlayed : 0);
+            var played = MaxRoundsValue - (Plugin.gameRules != null ? Plugin.gameRules.TotalRoundsPlayed : 0);
             if (played < 0)
                 return 0;
             return played;
@@ -3626,10 +3629,10 @@ public class MaxRoundsManager
 
         return CanClinch && (RemainingWins <= Plugin.Config.WinDrawSettings.TriggerRoundsBeforeEnd);
     }
-    private static CCSGameRules GetGameRules()
+/*    private static CCSGameRules GetGameRules()
     {
         return CounterStrikeSharp.API.Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").First().GameRules!;
-    }
+    } */
     public void CheckConfig()
     {
         if (Plugin.Config.WinDrawSettings.VoteDependsOnRoundWins)
@@ -3892,6 +3895,15 @@ public class MCCoreAPI : MCIAPI
     public bool GGMC_IsVoteInProgress()
     {
         return _mapChooser.IsVoteInProgress;
+    }
+    public bool GGMC_IsPlayerActiveMenu(int slot)
+    {
+        bool result = false;
+        if (WASDMenu.Players.TryGetValue(slot, out var player))
+        {
+            result = player.ActiveMenu;
+        }
+        return result;
     }
     public event Action? CanVoteEvent;
     public void RaiseCanVoteEvent()

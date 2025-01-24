@@ -8,37 +8,57 @@ public class WasdManager : IWasdMenuManager
 {
     public void OpenMainMenu(CCSPlayerController? player, IWasdMenu? menu)
     {
-        if(player == null)
-            return;
-        WASDMenu.Players[player.Slot].OpenMainMenu((WasdMenu?)menu);
+        if(player != null && menu != null)
+        {
+            if (WASDMenu.Players.TryGetValue(player.Slot, out var pl))
+            {
+                pl.OpenMainMenu((WasdMenu)menu);
+            }
+        }
     }
 
     public void CloseMenu(CCSPlayerController? player)
     {
-        if(player == null)
-            return;
-        WASDMenu.Players[player.Slot].OpenMainMenu(null);
+        if(player != null)
+        {
+            if (WASDMenu.Players.TryGetValue(player.Slot, out var pl))
+            {
+                pl.OpenMainMenu(null);
+            }
+        }
     }
 
     public void CloseSubMenu(CCSPlayerController? player)
     {
-        if(player == null)
-            return;
-        WASDMenu.Players[player.Slot].CloseSubMenu();
+        if(player != null)
+        {
+            if (WASDMenu.Players.TryGetValue(player.Slot, out var pl))
+            {
+                pl.CloseSubMenu();
+            }
+        }
     }
 
     public void CloseAllSubMenus(CCSPlayerController? player)
     {
-        if(player == null)
-            return;
-        WASDMenu.Players[player.Slot].CloseAllSubMenus();
+        if(player != null)
+        {
+            if (WASDMenu.Players.TryGetValue(player.Slot, out var pl))
+            {
+                pl.CloseAllSubMenus();
+            }
+        }
     }
 
     public void OpenSubMenu(CCSPlayerController? player, IWasdMenu? menu)
     {
-        if (player == null)
-            return;
-        WASDMenu.Players[player.Slot].OpenSubMenu(menu);
+        if (player != null && menu != null)
+        {
+            if (WASDMenu.Players.TryGetValue(player.Slot, out var pl))
+            {
+                pl.OpenSubMenu(menu);
+            }
+        }
     }
 
     public IWasdMenu CreateMenu(string title = "", bool freezePlayer = true)

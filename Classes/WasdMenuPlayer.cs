@@ -34,6 +34,16 @@ public class WasdMenuPlayer
     string strBack = "Back";
     string bottomMenuLine = "";
     string bottomSubMenuLine = "";
+    public bool ActiveMenu
+    {
+        get
+        {
+            if (CurrentChoice == null || MainMenu == null)
+                return false;
+            else
+                return true; 
+        }
+    }
     public void UpdateLocalization()
     {
         if (player != null && Localizer != null)
