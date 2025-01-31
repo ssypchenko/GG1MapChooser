@@ -35,7 +35,7 @@ namespace MapChooser;
 public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
 {
     public override string ModuleName => "GG1_MapChooser";
-    public override string ModuleVersion => "v1.6.2";
+    public override string ModuleVersion => "v1.6.3";
     public override string ModuleAuthor => "Sergey";
     public override string ModuleDescription => "Map chooser, voting, rtv, nominate, etc.";
     public MCCoreAPI MCCoreAPI { get; set; } = null!;
@@ -125,6 +125,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     public string MapToChange = ""; 
     private readonly object _timerLock = new object();
     public CCSGameRules? gameRules;
+    public bool roundRestart = false; // for onTick menu to not flickering
     public override void Load(bool hotReload) 
     {
         Logger.LogInformation($"{ModuleVersion}");
@@ -186,6 +187,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         RegisterEventHandler<EventRoundAnnounceLastRoundHalf>(EventRoundAnnounceLastRoundHalfHandler);
         RegisterEventHandler<EventRoundAnnounceMatchStart>(EventRoundAnnounceMatchStartHandler);
         RegisterEventHandler<EventRoundAnnounceWarmup>(EventRoundAnnounceWarmupHandler);
+        RegisterEventHandler<EventWarmupEnd>(EventWarmupEndHandler);
         RegisterEventHandler<EventCsWinPanelMatch>(EventCsWinPanelMatchHandler);
         
         RegisterListener<Listeners.OnMapStart>(OnMapStart);
@@ -226,6 +228,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         DeregisterEventHandler<EventRoundAnnounceLastRoundHalf>(EventRoundAnnounceLastRoundHalfHandler);
         DeregisterEventHandler<EventRoundAnnounceMatchStart>(EventRoundAnnounceMatchStartHandler);
         DeregisterEventHandler<EventRoundAnnounceWarmup>(EventRoundAnnounceWarmupHandler);
+        DeregisterEventHandler<EventWarmupEnd>(EventWarmupEndHandler);
         DeregisterEventHandler<EventCsWinPanelMatch>(EventCsWinPanelMatchHandler);
 
         wASDMenu.Unload(hotReload);
@@ -452,10 +455,20 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     {
         if (@event is null)
             return HookResult.Continue;
-
-        Logger.LogInformation("EventRoundAnnounceWarmupHandler");
+        roundRestart = true;
+        Logger.LogInformation("Warmup started");
         return HookResult.Continue;
     } 
+    public HookResult EventWarmupEndHandler(EventWarmupEnd @event, GameEventInfo info)
+    {
+        roundRestart = false;
+        if (@event is null)
+            return HookResult.Continue;
+
+        Logger.LogInformation("Warmup End");
+        return HookResult.Continue;
+    } 
+
     public HookResult EventRoundAnnounceLastRoundHalfHandler(EventRoundAnnounceLastRoundHalf @event, GameEventInfo info)
     {
         if (@event is null)
@@ -469,7 +482,8 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         if (@event is null)
             return HookResult.Continue;
 
-        Logger.LogInformation("EventRoundAnnounceMatchStartHandler");
+        Logger.LogInformation("Match Started");
+        Server.PrintToChatAll("Match Started");
         roundsManager.ClearRounds();
         return HookResult.Continue;
     }
@@ -477,7 +491,6 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     {
         if ((DateTime.Now - lastRoundStartEventTime).TotalSeconds < 3)
             return HookResult.Continue;
-
         lastRoundStartEventTime = DateTime.Now;
         if (canVote)
         {
@@ -937,6 +950,10 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     private void ChangeMapInFive(string mapname)
     {
         Logger.LogInformation($"Map will be changed in 5 seconds");
+        if (Config.OtherSettings.TvStopRecord)
+        {
+            Server.ExecuteCommand("tv_stoprecord");
+        }
         AddTimer (5.0f, () => {
             if (Maps_from_List.TryGetValue(mapname, out var mapInfo))
             {
@@ -3154,14 +3171,14 @@ public class WASDMenu
 
     public void OnTick()
     {
-        if (Plugin.gameRules == null)
+/*        if (Plugin.gameRules == null)
         {
             Plugin.InitGameRules();
         }
         else
         {
-            Plugin.gameRules.GameRestart = Plugin.gameRules.RestartRoundTime < Server.CurrentTime;
-        }
+            Plugin.gameRules.GameRestart = Plugin.roundRestart;
+        } */
         DateTime now = DateTime.Now;
         foreach (var player in Players.Values.Where(p => p.MainMenu != null))
         {
@@ -3449,6 +3466,10 @@ public class OtherSettings
     /* Check if problems with Workshop map  in collection (if it doesn't exists, server default map will be loaded, so plugin change to a random map) */
     [JsonPropertyName("WorkshopMapProblemCheck")]
     public bool WorkshopMapProblemCheck { get; set; } = true;
+
+    /* Execute server command to stop tv record before the map change */
+    [JsonPropertyName("TvStopRecord")]
+    public bool TvStopRecord { get; set; } = false;
 }
 public enum SSMC_ChangeMapTime
 {
