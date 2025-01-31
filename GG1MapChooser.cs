@@ -125,7 +125,6 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     public string MapToChange = ""; 
     private readonly object _timerLock = new object();
     public CCSGameRules? gameRules;
-    public bool roundRestart = false; // for onTick menu to not flickering
     public override void Load(bool hotReload) 
     {
         Logger.LogInformation($"{ModuleVersion}");
@@ -455,13 +454,11 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     {
         if (@event is null)
             return HookResult.Continue;
-        roundRestart = true;
         Logger.LogInformation("Warmup started");
         return HookResult.Continue;
     } 
     public HookResult EventWarmupEndHandler(EventWarmupEnd @event, GameEventInfo info)
     {
-        roundRestart = false;
         if (@event is null)
             return HookResult.Continue;
 
@@ -483,7 +480,6 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             return HookResult.Continue;
 
         Logger.LogInformation("Match Started");
-        Server.PrintToChatAll("Match Started");
         roundsManager.ClearRounds();
         return HookResult.Continue;
     }
