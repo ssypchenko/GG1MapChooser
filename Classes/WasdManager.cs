@@ -12,7 +12,8 @@ public class WasdManager : IWasdMenuManager
         {
             if (WASDMenu.Players.TryGetValue(player.Slot, out var pl))
             {
-                pl.OpenMainMenu((WasdMenu)menu);
+                if (!pl.ActiveMenu)
+                    pl.OpenMainMenu((WasdMenu)menu);
             }
         }
     }

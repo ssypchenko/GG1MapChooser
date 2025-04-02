@@ -21,6 +21,7 @@ using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Cvars;
 using CounterStrikeSharp.API.Modules.Entities;
 using CounterStrikeSharp.API.Modules.Entities.Constants;
+using CounterStrikeSharp.API.Modules.Events;
 using CounterStrikeSharp.API.Modules.Menu;
 using CounterStrikeSharp.API.Modules.Timers;
 using Timer = CounterStrikeSharp.API.Modules.Timers.Timer;
@@ -35,7 +36,7 @@ namespace MapChooser;
 public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
 {
     public override string ModuleName => "GG1_MapChooser";
-    public override string ModuleVersion => "v1.6.4";
+    public override string ModuleVersion => "v1.6.6";
     public override string ModuleAuthor => "Sergey";
     public override string ModuleDescription => "Map chooser, voting, rtv, nominate, etc.";
     public MCCoreAPI MCCoreAPI { get; set; } = null!;
@@ -368,9 +369,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                     return;
                 }
             }
-            _selectedMap = null;
-            _roundEndMap = null;
-            MapToChange = "";
+    
             RestartProblems = 0;
             
             if (Config.VoteSettings.RememberPlayedMaps > 0)
@@ -836,7 +835,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     //   add map to maplist[i])
             validmaps++;
             validmapnames[validmaps] = mapcheck.Key;
-            currentmapweight = mapcheck.Value.Weight == -1 ? 1 : mapcheck.Value.Weight;
+            currentmapweight = mapcheck.Value.Weight == -1 ? Config.OtherSettings.DefaultMapWeight : mapcheck.Value.Weight;
             validmapweight[validmaps] = validmapweight[validmaps - 1] + currentmapweight;
             i++;
         }
@@ -1606,11 +1605,11 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             //   add map to maplist[i])
                     validmaps++;
                     validmapnames[validmaps] = mapcheck.Key;
-                    currentmapweight = mapcheck.Value.Weight == -1 ? 1 : mapcheck.Value.Weight;
+                    currentmapweight = mapcheck.Value.Weight == -1 ? Config.OtherSettings.DefaultMapWeight : mapcheck.Value.Weight;
                     if (currentmapweight < 1)
                     {
-                        Logger.LogInformation($"Update weight for {mapcheck.Key} from {currentmapweight} to 1");
-                        currentmapweight = 1;
+                        Logger.LogInformation($"Update weight for {mapcheck.Key} from {currentmapweight} to default");
+                        currentmapweight = Config.OtherSettings.DefaultMapWeight;
                     }
                     validmapweight[validmaps] = validmapweight[validmaps - 1] + currentmapweight;
                 }
@@ -1821,7 +1820,9 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         foreach (var player in playerEntities)
         {
             if (wasdmenu)
-                wASDMenu.manager.OpenMainMenu(player, GlobalWASDMenu);
+            {
+                TryOpenWASDMenu(player);
+            }
             else
                 MenuManager.OpenChatMenu(player, GlobalChatMenu!);
             if (playSound)
@@ -1830,6 +1831,67 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
 
         AddTimer((float)timeToMapVote, () => TimerVoteMap(changeTime), TimerFlags.STOP_ON_MAPCHANGE);
         Logger.LogInformation($"TimerVoteMap started to trigger in {timeToMapVote}");
+    }
+    private void TryOpenWASDMenu(CCSPlayerController pl)
+    {
+        if (MCCoreAPI.GGMC_IsPlayerActiveMenu(pl.Slot))
+        {
+            if (players[pl.Slot] != null && 
+                players[pl.Slot].ActivateMenu == null &&
+                Config.VoteSettings.VotingTime - 2 > 0)
+            {
+                int slot = pl.Slot;
+                players[slot].TimerCounts = Config.VoteSettings.VotingTime - 2;
+                players[slot].ActivateMenu = AddTimer(1.0f,() => {
+                    if (players[slot] != null && players[slot].ActivateMenu != null)
+                    {
+                        if (players[slot].TimerCounts-- < 0)
+                        {
+                            try
+                            {
+                                players[slot].ActivateMenu?.Kill();
+                            }
+                            catch (SystemException)
+                            {
+                                
+                            }
+                            players[slot].ActivateMenu = null;
+                            return;
+                        }
+                        var plr = Utilities.GetPlayerFromSlot(slot);
+                        if (plr != null && IsValidPlayer(plr))
+                        {
+                            if (!MCCoreAPI.GGMC_IsPlayerActiveMenu(slot))
+                            {
+                                try
+                                {
+                                    players[slot].ActivateMenu?.Kill();
+                                }
+                                catch (SystemException)
+                                {
+                                    
+                                }
+                                players[slot].ActivateMenu = null;
+                                players[slot].TimerCounts = -1;
+                                wASDMenu.manager.OpenMainMenu(plr, GlobalWASDMenu);
+                            }
+                        }
+                        else
+                        {
+                            Logger.LogError($"ERROR: Can't get player controller for slot {slot} to activate menu");
+                        }
+                    }
+                }, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE);
+            }
+            else
+            {
+                Logger.LogError($"ERROR: Can't start ActivateMenu timer for player slot {pl.Slot}");
+            }
+        }
+        else
+        {
+            wASDMenu.manager.OpenMainMenu(pl, GlobalWASDMenu);
+        }
     }
 
     [GameEventHandler(HookMode.Post)]
@@ -1881,6 +1943,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             if (winsLeft > 0)
                 caller.PrintToChat(Localizer["wins.left", winsLeft]);
         }
+        //*********************** add message if both are not set ************************************
     }
 
     [ConsoleCommand("nominate", "Nominate")]
@@ -1898,7 +1961,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         {
             if (Config.VoteSettings.AllowNominate)
             {
-                if (_roundEndMap != null && _roundEndMap.Length > 0)
+                if (!string.IsNullOrEmpty(_roundEndMap))
                 {
                     player.PrintToChat(Localizer["no.nomination"]);
                     return;
@@ -2363,14 +2426,15 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         {
             foreach (var mapcheck in Maps_from_List)
             {
-                caller.PrintToChat($"{mapcheck.Key} weight: {(mapcheck.Value.Weight == -1 ? 1 : mapcheck.Value.Weight)}");
+                caller.PrintToChat($"{mapcheck.Key} weight: {(mapcheck.Value.Weight == -1 ? Config.OtherSettings.DefaultMapWeight : mapcheck.Value.Weight)}");
             }
         }
         else
         {
+            Console.WriteLine($"Map weights (default {Config.OtherSettings.DefaultMapWeight}):");
             foreach (var mapcheck in Maps_from_List)
             {
-                Console.WriteLine($"{mapcheck.Key} weight: {(mapcheck.Value.Weight == -1 ? 1 : mapcheck.Value.Weight)}");
+                Console.WriteLine($"{mapcheck.Key} weight: {(mapcheck.Value.Weight == -1 ? Config.OtherSettings.DefaultMapWeight : mapcheck.Value.Weight)}");
             }
         }
     }
@@ -2477,6 +2541,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         if (nominatedMaps.Contains(map))
         {
             PrintToPlayerChat(player, "nominated.already");
+            Logger.LogInformation($"{player.PlayerName} wants to nominate {map}, but it is already nominated");
         }
         else
         {
@@ -2485,21 +2550,26 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             {
                 case Nominations.Nominated:
                     PrintToPlayerChat(player, "map.nominated", map);
+                    Logger.LogInformation($"{player.PlayerName} nominated {map}");
                     break;
 
                 case Nominations.AlreadyNominated:
                     PrintToPlayerChat(player, "already.nominated");
+                    Logger.LogInformation($"{player.PlayerName} wants to nominate {map}, but it is already nominated");
                     break; 
                 case Nominations.NoMap:
                     PrintToPlayerChat(player, "no.map", map);
+                    Logger.LogInformation($"{player.PlayerName} wants to nominate {map}, but it is not in the map list");
                     break;
 
                 case Nominations.NotNow:
                     PrintToPlayerChat(player, "not.now");
+                    Logger.LogInformation($"{player.PlayerName} wants to nominate {map}, but it is not allowed now");
                     break;
 
                 case Nominations.Error:
                     PrintToPlayerChat(player, "nomination.error");
+                    Logger.LogInformation($"{player.PlayerName} wants to nominate {map}, there is an error");
                     break; 
             } 
         }
@@ -2672,6 +2742,8 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         nominatedMaps.Clear();
         mapsToVote.Clear();
         _selectedMap = null;
+        _roundEndMap = null;
+        MapToChange = "";
         _votedMap = 0;
         optionCounts = new Dictionary<string, int>(0);
         rtvRestartProblems = 0;
@@ -3480,6 +3552,10 @@ public class OtherSettings
     /* Execute server command to stop tv record before the map change */
     [JsonPropertyName("TvStopRecord")]
     public bool TvStopRecord { get; set; } = false;
+
+    /* Default Map weight value if not set in map file */
+    [JsonPropertyName("DefaultMapWeight")]
+    public int DefaultMapWeight { get; set; } = 1;
 }
 public enum SSMC_ChangeMapTime
 {
@@ -3521,6 +3597,8 @@ public class Player
     {
         return !string.IsNullOrEmpty(ProposedMaps);
     }
+    public Timer? ActivateMenu { get; set; }
+    public int TimerCounts { get; set; } = 0;
 }
 public class MaxRoundsManager
 {

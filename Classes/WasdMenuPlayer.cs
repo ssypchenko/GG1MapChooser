@@ -79,7 +79,7 @@ public class WasdMenuPlayer
         
         if (MainMenu.FreezePlayer && player != null)
         {
-            _plugin.Logger.LogInformation("*************player freezed");
+//            _plugin.Logger.LogInformation("*************player freezed");
             player.Freeze();
         }
 
