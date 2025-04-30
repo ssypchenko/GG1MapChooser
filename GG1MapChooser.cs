@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Data;
+using System.Linq;
 using System.Text;
 using System.Net.Http.Headers;
 using System.Text.Json;
@@ -36,7 +37,7 @@ namespace MapChooser;
 public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
 {
     public override string ModuleName => "GG1_MapChooser";
-    public override string ModuleVersion => "v1.6.5";
+    public override string ModuleVersion => "v1.6.6";
     public override string ModuleAuthor => "Sergey";
     public override string ModuleDescription => "Map chooser, voting, rtv, nominate, etc.";
     public MCCoreAPI MCCoreAPI { get; set; } = null!;
@@ -105,6 +106,9 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     public bool MapIsChanging = false;
     public bool IsVoteInProgress { get; set; } = false;
     private Timer? _timeLimitTimer = null;
+    private bool _timeLimitTimerStarted = false; // Variable to check if timeLimit timer is started
+    private DateTime _timeLimitStartTime;    // Variable to store the start time of timeLimit timer
+    private float _timeLimitDuration; // Variable to store the duration of timeLimit timer
     private Timer? _timeLimitMapChangeTimer = null;
     private bool _timeLimitVoteRoundStart = false;
     private float TimeLimitValue;
@@ -299,6 +303,25 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                     _timerManager.LogAllTimers();
                 }, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE);
             }
+            // this is for the case when the first player joined to check if TimeLimit passed but the map was not changed
+            if (players.Count(player => player != null && player.putInServer) == 1)
+            {
+                if (Config.TimeLimitSettings.VoteDependsOnTimeLimit && _timeLimitTimerStarted)
+                {
+                    TimeSpan comparisonDuration = TimeSpan.FromSeconds(_timeLimitDuration);
+                    TimeSpan elapsedTime = DateTime.UtcNow - _timeLimitStartTime;
+                    if (elapsedTime > comparisonDuration)
+                    {
+                        Logger.LogWarning($"{elapsedTime.TotalMinutes} minutes have passed since the timeLimit timer started.");
+                        // In 10 seconds start vote
+                        _roundEndMap = null;
+                        AddTimer(10.0f, () =>
+                        {
+                            DoAutoMapVote(null!, Config.VoteSettings.VotingTime, SSMC_ChangeMapTime.ChangeMapTime_Now, Config.VoteSettings.EndMapVoteWASDMenu);
+                        }, TimerFlags.STOP_ON_MAPCHANGE);
+                    }
+                }
+            }
         }
     }
     private void OnClientAuthorized(int slot, SteamID id)
@@ -331,6 +354,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     private void OnMapStart(string name)
     {
         _matchStarted = false;
+        _timeLimitTimerStarted = false;
         MapIsChanging = false;
         Logger.LogInformation(name + " loaded");
         if (Config.DiscordSettings.DiscordWebhook != "" && Config.DiscordSettings.DiscordMessageMapStart)
@@ -654,6 +678,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     private void TimeLimitTimerHandle()
     {
         _timeLimitTimer = null;
+        _timeLimitTimerStarted = false;
         Logger.LogInformation("TimeLimit Timer to start a vote happen.");
         
         if (_timeLimitMapChangeTimer != null)
@@ -1510,6 +1535,10 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         if (!canVote)
         {
             Console.WriteLine("[GGMC] Can't vote now");
+            Server.NextFrame(() => 
+            {
+                Logger.LogInformation("DoAutoMapVote: Can't do Auto Map Vote - not canVote.");
+            });
             IsVoteInProgress = false;
             return;
         }
@@ -3013,6 +3042,9 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     private void StartOrRestartTimeLimitTimer(float duration)
     {
         SimpleKillTimer(_timeLimitTimer);
+        _timeLimitDuration = duration;
+        _timeLimitTimerStarted = true;
+        _timeLimitStartTime = DateTime.UtcNow;
         _timeLimitTimer = AddTimer(duration, TimeLimitTimerHandle, TimerFlags.STOP_ON_MAPCHANGE);
     }
     private void KillRTVtimer()
