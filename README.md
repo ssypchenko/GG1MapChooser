@@ -55,6 +55,7 @@
     <li><code>ExtendMapInVote</code> - Set to true to add the "Extend Map" menu item. It increases the "mp_timelimit" variable.</li>
     <li><code>ExtendMapTimeMinutes</code> - Time in minutes to increase the "mp_timelimit" variable.</li>
     <li><code>ChangeMapAfterVote</code> - Plugin will Change the Map immediately after the vote.</li>
+    <li><code>SpectatorsCanVote</code> - Set false if you want to prevent spectators from voting.</li>
 </ul></p>
 <p><b>RTVSettings</b><br>
 <ul>
@@ -77,6 +78,8 @@
     <li><code>TriggerSecondsBeforEnd</code> - Number of seconds before the end of the map to start the vote. Leave enough time for the Vote duration set in "VotingTime"</li>
     <li><code>ChangeMapAfterTimeLimit</code> - Plugin will Change the Map if it is selected in vote after the end of the time limit.</li>
     <li><code>VoteNextRoundStartAfterTrigger</code> - if there are several rounds during the time limit, the vote will start on the next RoundStart after being triggered by "TriggerSecondsBeforEnd".</li>
+    <li><code>VoteRoundEndAfterTrigger</code> - the vote will start on the Round End after being triggered by "TriggerSecondsBeforEnd". In both cases the timelimit will be extended just in case to wait the event.</li>
+    <li><code>MinutesExtendTimeLimitToRoundEnd</code> - Time to extend time limit to finish the round. It can be extended two times only. Then the vote will start anyway.</li>
 </ul></p>
 <p><b>DiscordSettings</b><br>
 <ul>
@@ -90,6 +93,7 @@
     <li><code>SoundInMenu</code> - Turns on (true) / off (false) sounds in menu for navigation between options, open and close menu.</li>
     <li><code>FreezePlayerInMenu</code> - If true, a player will be frozen while navigating the menu.</li>
     <li><code>FreezeAdminInMenu</code> - If true, an admin will be frozen while navigating the menu.</li>
+    <li><code>ScrollUp</code>, <code>ScrollDown</code>, <code>Choose</code>, <code>Back</code>, <code>Exit</code> - keys or commands for menu.</li> 
 </ul></p>
 <p><b>OtherSettings</b><br>
 <ul>
@@ -101,6 +105,8 @@
     <li><code>RandomMapOnStartDelay</code> - Delay in seconds before changing to a random map on server restart.</li>
     <li><code>LastDisconnectedChangeMap</code> - Switch to a random map after the last player disconnects.</li>
     <li><code>WorkshopMapProblemCheck</code> - Checks whether the voted or admin-chosen map is loaded and if not (in case of problems with the workshop map) loads a random map.</li>
+    <li><code>TvStopRecord</code> - set true to execute server command to stop tv record before the map change to avoid possible crashes.</li>
+    <li><code>DefaultMapWeight</code> - By default a map weight is 1 if it is not actually set for the map. Maps with higher weights have more chances to be selected in the voting list. For Map Rating plugin the default weight can be set to 3, so players can rate the map higher (4 or 5) to increase chances or lower (0 - 2) to decrease chances.</li> 
 </ul></p>
 
 <h3>Discord message Configuration</h3>
@@ -123,8 +129,8 @@
 <ul>
     <li>If you call the vote from external plugin you have two options:
         <ul>
-            <li>Use <code>ggmc_mapvote_start</code> if the external plugin ends the game so the server will change the map after the Win/Draw</li>
-            <li>Use <code>ggmc_mapvote_with_change</code> command if you want that mapchooser changes the map itself immediately after the vote.</li>
+            <li>Use <code>ggmc_mapvote_start</code> server command if the external plugin ends the game so the server will change the map after the Win/Draw</li>
+            <li>Use <code>ggmc_mapvote_with_change</code> server command if you want that mapchooser changes the map itself immediately after the vote.</li>
         </ul>
         <p>In that case you need to have "ChangeMapAfterWinDraw": false, "ChangeMapAfterVote": false, "VoteDependsOnRoundWins": false, "VoteDependsOnTimeLimit": false.</p>
     </li>
@@ -151,19 +157,27 @@
                 <li>To accommodate this, and if your vote is scheduled for the very end of the game, set the mp_endmatch_votenextleveltime cvar to a duration long enough to allow the plugin to complete the vote (VotingTime) and change the map (add an extra 5 seconds).</li>
                 </ul>
             </li>
-            <li>Note on Post-Game Voting:<br>
-                <ul><li>Be aware that once the game finishes, the WASD menu will not be shown, and votes via chat may not be allowed.</li></ul>
-            </li>
         </ul>
     </li>
     <li>If you play one long round or just limited time and want to have the vote before tha end of that time (defined in mp_timelimit), you set:<br>"VoteDependsOnTimeLimit": true, "ChangeMapAfterTimeLimit": true,  "ChangeMapAfterWinDraw": false, "ChangeMapAfterVote": false, "VoteDependsOnRoundWins": false. Take attention that "TriggerSecondsBeforEnd" should be more that "VotingTime", otherwise the vote will not have time to finish.</li>
+    <li>Check other settings in the config which may allow you to fine-tune the plugin behaviour as you like it.</li>
 </ul>
 
-<h2>Admin Commands</h2>
+<h2>Plugin Commands:</h2>
+<h3>Player Commands:</h3>
+<ul>
+    <li><code>rtv</code> - Rock The Vote - express players wish to change the map.</li>
+    <li><code>nominate</code> - Players can select maps they want to see in the next vote executed by rtv or the the game end. Nominated maps will be in the list only if they suite other conditions - number of players on the server or recently played.</li>
+    <li><code>revote</code> - If a player changed his mind or a menu was accidentally closed, player can reopen the menu with the revote command and vote.</li>
+    <li><code>nextmap</code> - Displays the map selected in the vote.</li>
+    <li><code>timeleft</code> - Displays the timeleft in case of the time limit mode.</li>
+</ul>
+<h3>Admin Commands</h3>
 <ul>
     <li><strong>Map Change:</strong> Use <code>css_maps</code> or <code>!maps</code> to open a menu with options: simply change the map (manually choose or automatic selection); start a vote with automatic or custom selections; start a vote to see if players agree to change the map; set the next map.</li>
     <li>Players or admins confirm WASD menu options using the “E” button (“use” command).</li>
-    <li><strong>Quick Map Selection:</strong> Use <code>ggmap &lt;partofmapname&gt;</code> to quickly find and switch to a map using a partial name match. Or you can use <code>ggmap &lt;exactmapname&gt;</code> as aa server command to change a map from external scripts or plugins.</li>
+    <li><strong>Quick Map Selection:</strong> Use <code>ggmap &lt;partofmapname&gt;</code> to quickly find and switch to a map using a partial name match. Or you can use <code>ggmap &lt;exactmapname&gt;</code> as a server command to change a map from external scripts or plugins.</li>
+    <li><code>setnextmap</code> - Command to set the next map without voting.</li>
 </ul>
 
 <h3>External Controls:</h3>
@@ -172,13 +186,12 @@
     <li><code>ggmc_mapvote_with_change [time]</code> - Trigger a map vote externally with an optional time parameter and immediate map change after the vote ends. This command can be used with set workshop map IDs in the map list (GGMCmaps.json).</li>
     <li><code>ggmc_auto_mapchange</code> - Automatically change to a random map.</li>
     <li><code>ggmc_nortv</code> - Temporarily disable the RTV command to maintain game continuity.</li>
-    <li><code>ggmc_change_nextmap</code> - Immediately changes the map to the previously voted map. .</li>
+    <li><code>ggmc_change_nextmap</code> - Immediately changes the map to the previously voted map.</li>
 </ul>
 
 <h3>Other Commands:</h3>
 <ul>
     <li><code>reloadmaps</code> - Command to reload maps file. It reloads every map start, but you can reload it manually if necessary.</li>
-    <li><code>setnextmap</code> - Command to set the next map without voting.</li>
 </ul>
 
 <h2>Important Notes About Usage</h2>
