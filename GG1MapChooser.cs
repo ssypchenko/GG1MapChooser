@@ -3108,7 +3108,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             {
                 TimeLimitValue = timeLimitOld + Config.TimeLimitSettings.MinutesExtendTimeLimitToRoundEnd; // extend time limit for 5 minutes to allow round end
                 TimeLimit.SetValue<float>(TimeLimitValue);
-                Logger.LogInformation($"TimeLimit extended for 5 minutes more to allow Round End or Start Next round");
+                Logger.LogInformation($"TimeLimit extended for {Config.TimeLimitSettings.MinutesExtendTimeLimitToRoundEnd} minutes more to allow Round End or Start Next round");
                 AddTimer((float)Config.TimeLimitSettings.MinutesExtendTimeLimitToRoundEnd * 60 + 1.0f, () =>
                 {
                     ExtendTimeLimit();
