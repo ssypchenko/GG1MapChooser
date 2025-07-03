@@ -282,25 +282,24 @@ public static class CCSPlayerControllerExtensions
         CCSPlayerPawn? playerPawn = player.PlayerPawn.Value;
 
         if (playerPawn == null)
-        {
             return;
-        }
-        playerPawn.ChangeMovetype(MoveType_t.MOVETYPE_OBSOLETE);
+
+        playerPawn.MoveType = MoveType_t.MOVETYPE_NONE;
+        playerPawn.ActualMoveType = MoveType_t.MOVETYPE_NONE;
+        Schema.SetSchemaValue(playerPawn.Handle, "CBaseEntity", "m_nActualMoveType", 0);
+        Utilities.SetStateChanged(playerPawn, "CBaseEntity", "m_MoveType");
     }
+
     public static void UnFreeze(this CCSPlayerController player)
     {
         CCSPlayerPawn? playerPawn = player.PlayerPawn.Value;
 
         if (playerPawn == null)
-        {
             return;
-        }
-        playerPawn.ChangeMovetype(MoveType_t.MOVETYPE_WALK);
-    }
-    private static void ChangeMovetype(this CBasePlayerPawn pawn, MoveType_t movetype)
-    {
-        pawn.MoveType = movetype;
-        Schema.SetSchemaValue(pawn.Handle, "CBaseEntity", "m_nActualMoveType", movetype);
-        Utilities.SetStateChanged(pawn, "CBaseEntity", "m_MoveType");
+
+        playerPawn.MoveType = MoveType_t.MOVETYPE_WALK;
+        playerPawn.ActualMoveType = MoveType_t.MOVETYPE_WALK;
+        Schema.SetSchemaValue(playerPawn.Handle, "CBaseEntity", "m_nActualMoveType", 2);
+        Utilities.SetStateChanged(playerPawn, "CBaseEntity", "m_MoveType");
     }
 }
