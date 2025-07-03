@@ -1139,7 +1139,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
 
     private IWasdMenu CreateMapsMenuWASD(Action<CCSPlayerController,IWasdMenuOption> action, CCSPlayerController playerController, bool freezePlayers = true, bool limits=true)
     {
-        IWasdMenu MapsMenu = wASDMenu.manager.CreateMenu();
+        IWasdMenu MapsMenu = wASDMenu.manager.CreateMenu("", freezePlayers);
       
         List<string> selectedMapList = new();
         bool haveSelectedMaps = false;
@@ -1267,7 +1267,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             IWasdMenu? acvm_menu;
             using (new WithTemporaryCulture(caller.GetLanguage()))
             {
-                acvm_menu = wASDMenu.manager.CreateMenu(_localizer["choose.map"]);
+                acvm_menu = wASDMenu.manager.CreateMenu(_localizer["choose.map"], Config.MenuSettings.FreezePlayerInMenu);
                 acvm_menu.Add(_localizer["manual.map"], AdminVoteMapManual); // Simply change the map
                 acvm_menu.Add(_localizer["automatic.map"], AdminVoteMapAuto); // Start voting for map
             }
@@ -2652,7 +2652,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                 return;
             if (Config.VoteSettings.NominationsWASDMenu)
                 {
-                    IWasdMenu nominate_menu = CreateMapsMenuWASD(Handle_Nominations, player);
+                    IWasdMenu nominate_menu = CreateMapsMenuWASD(Handle_Nominations, player, Config.MenuSettings.FreezePlayerInMenu, false);
                     if (nominate_menu != null)
                         wASDMenu.manager.OpenMainMenu(player, nominate_menu);
                 }
