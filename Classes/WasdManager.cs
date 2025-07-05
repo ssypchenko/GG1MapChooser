@@ -8,7 +8,7 @@ public class WasdManager : IWasdMenuManager
 {
     public void OpenMainMenu(CCSPlayerController? player, IWasdMenu? menu)
     {
-        if(player != null && menu != null)
+        if(player != null && player.IsValid && menu != null)
         {
             if (WASDMenu.Players.TryGetValue(player.Slot, out var pl))
             {
@@ -20,7 +20,7 @@ public class WasdManager : IWasdMenuManager
 
     public void CloseMenu(CCSPlayerController? player)
     {
-        if(player != null)
+        if(player != null && player.IsValid)
         {
             if (WASDMenu.Players.TryGetValue(player.Slot, out var pl))
             {
@@ -31,7 +31,7 @@ public class WasdManager : IWasdMenuManager
 
     public void CloseSubMenu(CCSPlayerController? player)
     {
-        if(player != null)
+        if(player != null && player.IsValid)
         {
             if (WASDMenu.Players.TryGetValue(player.Slot, out var pl))
             {
@@ -42,7 +42,7 @@ public class WasdManager : IWasdMenuManager
 
     public void CloseAllSubMenus(CCSPlayerController? player)
     {
-        if(player != null)
+        if(player != null && player.IsValid)
         {
             if (WASDMenu.Players.TryGetValue(player.Slot, out var pl))
             {
@@ -53,7 +53,7 @@ public class WasdManager : IWasdMenuManager
 
     public void OpenSubMenu(CCSPlayerController? player, IWasdMenu? menu)
     {
-        if (player != null && menu != null)
+        if (player != null && player.IsValid && menu != null)
         {
             if (WASDMenu.Players.TryGetValue(player.Slot, out var pl))
             {
@@ -61,13 +61,26 @@ public class WasdManager : IWasdMenuManager
             }
         }
     }
-
-    public IWasdMenu CreateMenu(string title = "", bool freezePlayer = true)
+    public void CloseActiveMenu(IWasdMenu? menu)
+    {
+        if (menu != null)
+        {
+            foreach (var player in WASDMenu.Players.Values)
+            {
+                if (player.MainMenu == menu)
+                {
+                    player.OpenMainMenu(null);
+                }
+            }
+        }
+    }
+    public IWasdMenu CreateMenu(string title = "", bool freezePlayer = true, bool displayOptionsCount = false)
     {
         WasdMenu menu = new WasdMenu
         {
             Title = title,
-            FreezePlayer = freezePlayer
+            FreezePlayer = freezePlayer,
+            DisplayOptionsCount = displayOptionsCount
         };
         return menu;
     }

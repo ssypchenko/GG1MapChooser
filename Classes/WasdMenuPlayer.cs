@@ -15,10 +15,10 @@ namespace MapChooser;
 public class WasdMenuPlayer
 {
     private readonly MapChooser _plugin;
-
     public WasdMenuPlayer(MapChooser plugin)
     {
         _plugin = plugin;
+        MoveType = _plugin.Config.MenuSettings.FreezeMode;
     }
     public CCSPlayerController player { get; set; } = null!;
     public WasdMenu? MainMenu = null;
@@ -34,6 +34,7 @@ public class WasdMenuPlayer
     string strBack = "Back";
     string bottomMenuLine = "";
     string bottomSubMenuLine = "";
+    private readonly int MoveType;
     public bool ActiveMenu
     {
         get
@@ -41,7 +42,7 @@ public class WasdMenuPlayer
             if (CurrentChoice == null || MainMenu == null)
                 return false;
             else
-                return true; 
+                return true;
         }
     }
     public void UpdateLocalization()
@@ -80,7 +81,7 @@ public class WasdMenuPlayer
         if (MainMenu.FreezePlayer && player != null)
         {
 //            _plugin.Logger.LogInformation("*************player freezed");
-            player.Freeze();
+            player.Freeze(MoveType);
         }
 
         if (_plugin.Config.MenuSettings.SoundInMenu && player != null)
@@ -225,7 +226,7 @@ public class WasdMenuPlayer
         UpdateCenterHtml();
     }
 
-    private void UpdateCenterHtml()
+    public void UpdateCenterHtml()
     {
         if (CurrentChoice == null || MainMenu == null)
             return;
@@ -241,18 +242,36 @@ public class WasdMenuPlayer
             }
             string leftArrow = "◄";
             string rightArrow = "►";
+            string votesText = "";
+            //            int votesCount;
             while (i < VisibleOptions)
             {
+                if (MainMenu.DisplayOptionsCount)
+                {
+
+                    if (option?.Value.Count > 0)
+                    {
+                        votesText = $"<font color='green'>({option?.Value.Count})</font>";
+                    }
+                    else
+                    {
+                        votesText = "";
+                    }
+                }
                 if (option == CurrentChoice)
                 {
-                    builder.AppendLine($"<font color='yellow'>{rightArrow}[</font> <font color='#9acd32' class='fontSize-m'>{option.Value.OptionDisplay}</font> <font color='yellow'>]{leftArrow}</font></b><br>");
+                    builder.AppendLine($"<font color='yellow'>{rightArrow}[</font> <font color='#9acd32' class='fontSize-m'>{option?.Value?.OptionDisplay}</font>{votesText} <font color='yellow'>]{leftArrow}</font></b><br>");
                 }
                 else
                 {
-                    builder.AppendLine($"<font color='white' class='fontSize-m'>{option?.Value.OptionDisplay}</font><br>");
+                    builder.AppendLine($"<font color='white' class='fontSize-m'>{option?.Value?.OptionDisplay}</font>{votesText}<br>");
                 }
                 i++;
                 option = option?.Next;
+                if (option == null)
+                {
+                    break; // Exit the loop if there are no more options
+                }
             }
         }
 
@@ -277,7 +296,7 @@ public class WasdMenuPlayer
 }
 public static class CCSPlayerControllerExtensions
 {
-    public static void Freeze(this CCSPlayerController player)
+    public static void Freeze(this CCSPlayerController player, int MoveT = 1)
     {
         CCSPlayerPawn? playerPawn = player.PlayerPawn.Value;
 
@@ -285,7 +304,20 @@ public static class CCSPlayerControllerExtensions
         {
             return;
         }
-        playerPawn.ChangeMovetype(MoveType_t.MOVETYPE_OBSOLETE);
+        switch (MoveT)
+        {
+            case 1: // Obsolete
+                playerPawn.ChangeMovetype(MoveType_t.MOVETYPE_OBSOLETE);
+                break;
+            case 2: // None
+                playerPawn.ChangeMovetype(MoveType_t.MOVETYPE_NONE);
+                break;
+            case 3: // Invalid
+                playerPawn.ChangeMovetype(MoveType_t.MOVETYPE_INVALID);
+                break;
+            default:
+                break;
+        }
     }
     public static void UnFreeze(this CCSPlayerController player)
     {
