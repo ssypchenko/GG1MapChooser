@@ -37,7 +37,7 @@ namespace MapChooser;
 public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
 {
     public override string ModuleName => "GG1_MapChooser";
-    public override string ModuleVersion => "v1.7.1";
+    public override string ModuleVersion => "v1.7.2";
     public override string ModuleAuthor => "Sergey";
     public override string ModuleDescription => "Map chooser, voting, rtv, nominate, etc.";
     public MCCoreAPI MCCoreAPI { get; set; } = null!;
@@ -1796,6 +1796,48 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             IsVoteInProgress = false;
             return;
         }
+        if (Config.VoteSettings.IncludeNoVote)
+        {
+            if (wasdmenu)
+            {
+                GlobalWASDMenu?.Add(_localizer["novote.line"], (player, option) =>
+                {
+                    if (!votePlayers.ContainsKey(player.Slot) && option != null && option.OptionDisplay != null)
+                    {
+                        option.Count++;
+                        wASDMenu.UpdatePlayersCenterHtml();
+                        votePlayers.Add(player.Slot, "novote.line");
+
+                        if (!optionCounts.TryGetValue("novote.line", out int count))
+                            optionCounts["novote.line"] = 1;
+                        else
+                            optionCounts["novote.line"] = count + 1;
+                        _votedMap++;
+                        PrintToServerChat("player.choice", player.PlayerName, option.OptionDisplay);
+                    }
+                    wASDMenu.manager.CloseMenu(player);
+                }, "novote.line");
+            }
+            else
+            {
+                GlobalChatMenu?.AddMenuOption(_localizer["novote.line"], (player, option) =>
+                {
+                    if (!votePlayers.ContainsKey(player.Slot) && option != null && option.Text != null)
+                    {
+                        votePlayers.Add(player.Slot, "novote.line");
+
+                        if (!optionCounts.TryGetValue("novote.line", out int count))
+                            optionCounts["novote.line"] = 1;
+                        else
+                            optionCounts["novote.line"] = count + 1;
+                        _votedMap++;
+                        PrintToServerChat("player.choice", player.PlayerName, option.Text);
+                    }
+                    MenuManager.CloseActiveMenu(player);
+                });
+            }
+        }
+
         if (Config.VoteSettings.ExtendMapInVote)
         {
             if (wasdmenu)
@@ -2776,27 +2818,40 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             }
             else
             {
-                // Find the maximum number of votes
-                int maxVotes = optionCounts.Values.Max();
-
-                // Get all maps with the maximum number of votes
-                var winningMaps = optionCounts.Where(kv => kv.Value == maxVotes).Select(kv => kv.Key).ToList();
-
-                // Choose a random map from the winning maps
-                if (winningMaps.Count == 1)
+                if (optionCounts.ContainsKey("novote.line")) // Remove "novote.line" from optionCounts if present
                 {
-                    _selectedMap = winningMaps[0];
+                    optionCounts.Remove("novote.line");
                 }
-                else if (winningMaps.Count > 1)
+                if (optionCounts.Count == 0)
                 {
-                    var rand = random.Next(0, winningMaps.Count - 1);
-                    _selectedMap = winningMaps[rand];
+                    _selectedMap = mapsToVote[random.Next(mapsToVote.Count)];
+                    PrintToServerChat("randommap.selected", _selectedMap);
+                    Logger.LogInformation($"TimerVoteMap: selected random map {_selectedMap}");
                 }
                 else
                 {
-                    Logger.LogInformation($"winningMaps.Count {winningMaps.Count}, something wrong");
+                    // Find the maximum number of votes
+                    int maxVotes = optionCounts.Values.Max();
+
+                    // Get all maps with the maximum number of votes
+                    var winningMaps = optionCounts.Where(kv => kv.Value == maxVotes).Select(kv => kv.Key).ToList();
+
+                    // Choose a random map from the winning maps
+                    if (winningMaps.Count == 1)
+                    {
+                        _selectedMap = winningMaps[0];
+                    }
+                    else if (winningMaps.Count > 1)
+                    {
+                        var rand = random.Next(0, winningMaps.Count - 1);
+                        _selectedMap = winningMaps[rand];
+                    }
+                    else
+                    {
+                        Logger.LogInformation($"winningMaps.Count {winningMaps.Count}, something wrong");
+                    }
+                    Logger.LogInformation($"[Selected map] {_selectedMap}");
                 }
-                Logger.LogInformation($"[Selected map] {_selectedMap}");
             }
             if (_selectedMap != null)
             {
@@ -2882,18 +2937,26 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     private static int GetRealClientCount(bool inGameOnly = true)
     {
         int clients = 0;
-        var playerEntities = Utilities.GetPlayers().Where(p => IsValidPlayer(p));
-        if (playerEntities != null && playerEntities.Any())
+        try
         {
-            foreach (var playerController in playerEntities)
+            var playerEntities = Utilities.GetPlayers().Where(p => IsValidPlayer(p));
+            if (playerEntities != null && playerEntities.Any())
             {
-                if (inGameOnly && playerController.Team != CsTeam.CounterTerrorist && playerController.Team != CsTeam.Terrorist)
+                foreach (var playerController in playerEntities)
                 {
-                    continue;
+                    if (inGameOnly && playerController.Team != CsTeam.CounterTerrorist && playerController.Team != CsTeam.Terrorist)
+                    {
+                        continue;
+                    }
+                    clients++;
                 }
-                clients++;
             }
         }
+        catch
+        {
+            return 0;
+        }
+
         return clients;
     }
     private void MakeRTVTimer(int interval)  // таймер для того, чтобы если кто-то напишет rtv, ему написали, через сколько секунд можно
@@ -3185,34 +3248,6 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             });
         }
     }
-    /*    public async Task<bool> KillTimer(Timer? parameter)
-        {
-            Timer? timerToKill = parameter;
-            if (timerToKill != null)
-            {
-                return await Task.Run(() =>
-                {
-                    try
-                    {
-                        Server.NextFrame(() =>
-                        {
-                            if (timerToKill != null)
-                            {
-                                timerToKill.Kill();
-                                timerToKill = null;
-                            }
-                        });
-                        return true; // Return true if the timer was successfully killed
-                    }
-                    catch (Exception ex)
-                    {
-                        Server.NextFrame(() => { Logger.LogError($"Failed to kill the timer: {ex.Message}"); });
-                        return false; // Return false if there was an error
-                    }
-                });
-            }
-            return true;
-        } */
     public enum Nominations
     {
         Nominated = 0,
@@ -3580,10 +3615,14 @@ public class VoteSettings
     /* Plugin will Change the Map after the vote which called by external plugin. */
     [JsonPropertyName("ChangeMapAfterVote")]
     public bool ChangeMapAfterVote { get; set; } = false;
-    
+
     /* Set false to prevent votes by Spectators. */
     [JsonPropertyName("SpectatorsCanVote")]
     public bool SpectatorsCanVote { get; set; } = true;
+    
+    /* Set true to include as the first line in the vote - NoVote to prevent accidental voting. */
+    [JsonPropertyName("IncludeNoVote")]
+    public bool IncludeNoVote { get; set; } = false;
 }
 public class RTVSettings
 {
