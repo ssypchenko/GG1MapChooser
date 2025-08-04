@@ -54,5 +54,6 @@
   "menu.move": "Pārvietot",
   "menu.select": "Izvēlēties",
   "menu.back": "Atpakaļ",
-  "menu.exit": "Iziet"
+  "menu.exit": "Iziet",
+  "novote.line": "Nav balss"
 } 

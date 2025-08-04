@@ -59,5 +59,6 @@
   "menu.move": "Упр",
   "menu.select": "Выбор",
   "menu.back": "Назад",
-  "menu.exit": "Закрыть"
+  "menu.exit": "Закрыть",
+  "novote.line": "Не голосую"
 } 

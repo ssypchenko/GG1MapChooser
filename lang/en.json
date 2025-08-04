@@ -54,5 +54,6 @@
   "menu.move": "Move",
   "menu.select": "Select",
   "menu.back": "Back",
-  "menu.exit": "Exit"
+  "menu.exit": "Exit",
+  "novote.line": "No Vote"
 } 

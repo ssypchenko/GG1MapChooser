@@ -54,5 +54,6 @@
   "menu.move": "移动",
   "menu.select": "选择",
   "menu.back": "返回",
-  "menu.exit": "退出"
+  "menu.exit": "退出",
+  "novote.line": "不投票"
 } 
