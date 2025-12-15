@@ -56,5 +56,7 @@
   "menu.select": "Select",
   "menu.back": "Back",
   "menu.exit": "Exit",
-  "novote.line": "No Vote"
-} 
+  "novote.line": "No Vote",
+  "map.cooldown": " [Cooldown]",
+  "map.nominated.suffix": " [Your Pick]"
+}

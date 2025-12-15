@@ -55,5 +55,7 @@
   "menu.select": "Izvēlēties",
   "menu.back": "Atpakaļ",
   "menu.exit": "Iziet",
-  "novote.line": "Nav balss"
+  "novote.line": "Nav balss",
+  "map.cooldown": " [Atdzišana]",
+  "map.nominated.suffix": " [Jūsu izvēle]"
 } 

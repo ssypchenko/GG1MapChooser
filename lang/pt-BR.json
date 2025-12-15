@@ -55,5 +55,7 @@
   "menu.select": "Selecionar",
   "menu.back": "Voltar",
   "menu.exit": "Sair",
-  "novote.line": "Sem voto"
+  "novote.line": "Sem voto",
+  "map.cooldown": " [Em espera]",
+  "map.nominated.suffix": " [Sua escolha]"
 } 
