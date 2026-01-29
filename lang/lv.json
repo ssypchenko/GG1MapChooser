@@ -57,5 +57,10 @@
   "menu.exit": "Iziet",
   "novote.line": "Nav balss",
   "map.cooldown": " [Atdzišana]",
-  "map.nominated.suffix": " [Jūsu izvēle]"
-} 
+  "map.nominated.suffix": " [Jūsu izvēle]",
+  "lowplayers.mode.on": "Zems spēlētāju skaits ({0}/{1}). Ieslēgts mazā spēlētāju skaita karšu kopums.",
+  "lowplayers.mode.off": "Spēlētāju skaits sasniedzis ({0}/{1}). Ieslēgts parastais karšu kopums.",
+  "lowplayers.vote.pool": "Sākta balsošana par mazā spēlētāju skaita kartēm ({0}/{1}).",
+  "normal.vote.pool": "Sākta kartes balsošana ({0}/{1}).",
+  "lowplayers.rtv.pool": "RTV izmantos mazā spēlētāju skaita karšu kopumu ({0}/{1})."
+}

@@ -58,5 +58,10 @@
   "menu.exit": "Exit",
   "novote.line": "No Vote",
   "map.cooldown": " [Cooldown]",
-  "map.nominated.suffix": " [Your Pick]"
+  "map.nominated.suffix": " [Your Pick]",
+  "lowplayers.mode.on": "Low player count ({0}/{1}). Low-player map pool enabled.",
+  "lowplayers.mode.off": "Player count reached ({0}/{1}). Normal map pool enabled.",
+  "lowplayers.vote.pool": "Low-player map vote started ({0}/{1}).",
+  "normal.vote.pool": "Map vote started ({0}/{1}).",
+  "lowplayers.rtv.pool": "RTV will use the low-player map pool ({0}/{1})."
 }

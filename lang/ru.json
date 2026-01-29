@@ -49,11 +49,6 @@
   "nortv.allowed": " {red}Команда RTV запрещена.",
   "nominate.notallowed": " {red}Команда Nominate запрещена.",
   "set.nextmap": "Задать Следующую Карту",
-  "menu.selection.left": "<img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/left.gif' class=''>",
-  "menu.selection.right": "<img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/right.gif' class=''>",
-  "menu.title.prefix": "<font color='green'>",
-  "menu.more.options.below": "<img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/arrow.gif' class=''> <img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/arrow.gif' class=''> <img src='https://raw.githubusercontent.com/oqyh/cs2-Kill-Sound-GoldKingZ/main/Resources/arrow.gif' class=''>",
-  "menu.bottom.text": "           <font color='cyan'>[ WASD - по меню ]</font> <br><font color='purple'>[ <img src='https://raw.githubusercontent.com/ssypchenko/GG1MapChooser/main/Resources/tab.gif' class=''> - выход ]",
   "time.left": "{green}Осталось времени матча: {0} мин {1} сек.",
   "rounds.left": "{red}Осталось раундов: {0}.",
   "wins.left": "{yellow}Осталось побед: {0}.",
@@ -63,5 +58,10 @@
   "menu.exit": "Закрыть",
   "novote.line": "Не голосую",
   "map.cooldown": " [Кулдаун]",
-  "map.nominated.suffix": " [Ваш выбор]"
-} 
+  "map.nominated.suffix": " [Ваш выбор]",
+  "lowplayers.mode.on": "Низкий онлайн ({0}/{1}). Включён пул карт для малого онлайна.",
+  "lowplayers.mode.off": "Онлайн достиг ({0}/{1}). Включён обычный пул карт.",
+  "lowplayers.vote.pool": "Голосование по пулу малого онлайна начато ({0}/{1}).",
+  "normal.vote.pool": "Голосование за карту начато ({0}/{1}).",
+  "lowplayers.rtv.pool": "RTV использует пул для малого онлайна ({0}/{1})."
+}

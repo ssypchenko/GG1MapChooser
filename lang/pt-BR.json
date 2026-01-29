@@ -57,5 +57,10 @@
   "menu.exit": "Sair",
   "novote.line": "Sem voto",
   "map.cooldown": " [Em espera]",
-  "map.nominated.suffix": " [Sua escolha]"
-} 
+  "map.nominated.suffix": " [Sua escolha]",
+  "lowplayers.mode.on": "Poucos jogadores ({0}/{1}). Pool de mapas para poucos jogadores ativado.",
+  "lowplayers.mode.off": "Jogadores suficientes ({0}/{1}). Pool normal de mapas ativado.",
+  "lowplayers.vote.pool": "Votação de mapas para poucos jogadores iniciada ({0}/{1}).",
+  "normal.vote.pool": "Votação de mapas iniciada ({0}/{1}).",
+  "lowplayers.rtv.pool": "O RTV usará o pool de mapas para poucos jogadores ({0}/{1})."
+}
