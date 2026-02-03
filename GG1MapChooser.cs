@@ -330,7 +330,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                         _roundEndMap = null;
                         AddTimer(10.0f, () =>
                         {
-                            DoAutoMapVote(null!, Config.VoteSettings.VotingTime, SSMC_ChangeMapTime.ChangeMapTime_Now, Config.VoteSettings.EndMapVoteWASDMenu);
+                            DoAutoMapVote(null!, Config.VoteSettings.VotingTime, SSMC_ChangeMapTime.ChangeMapTime_Now, GetVoteMenuMode());
                         }, TimerFlags.STOP_ON_MAPCHANGE);
                     }
                 }
@@ -943,6 +943,32 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             PrintToServerChat("normal.vote.pool", currentPlayers, limit);
         }
     }
+    private MenuMode ParseMenuMode(string? modeValue)
+    {
+        if (string.IsNullOrWhiteSpace(modeValue))
+            return MenuMode.Wasd;
+        switch (modeValue.Trim().ToLowerInvariant())
+        {
+            case "wasd":
+                return MenuMode.Wasd;
+            case "chat":
+            case "chatmenu":
+                return MenuMode.Chat;
+            case "both":
+                return MenuMode.Both;
+            default:
+                Logger.LogWarning($"Unknown menu mode '{modeValue}'. Falling back to 'wasd'.");
+                return MenuMode.Wasd;
+        }
+    }
+    private MenuMode GetVoteMenuMode()
+    {
+        return ParseMenuMode(Config.VoteSettings.EndMapVoteMenuMode);
+    }
+    private MenuMode GetNominationMenuMode()
+    {
+        return ParseMenuMode(Config.VoteSettings.NominationsMenuMode);
+    }
     //Start vote at the beginning of the round according to rules of Round Manager
     private void StartVote()
     {
@@ -961,7 +987,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             VotesCounter = 0;
             voteTimer = AddTimer(1.0f, EndOfVotes, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE);
             Logger.LogInformation("Vote Timer started at StartVote");
-            DoAutoMapVote(null!, timeToVote, SSMC_ChangeMapTime.ChangeMapTime_MapEnd, Config.VoteSettings.EndMapVoteWASDMenu);
+            DoAutoMapVote(null!, timeToVote, SSMC_ChangeMapTime.ChangeMapTime_MapEnd, GetVoteMenuMode());
         }
         else
         {
@@ -1528,7 +1554,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             {
                 Logger.LogInformation($"[GGMC]: Admin {caller.PlayerName} starts vote.");
                 IsVoteInProgress = true;
-                DoAutoMapVote(caller, Config.VoteSettings.VotingTime, SSMC_ChangeMapTime.ChangeMapTime_Now, Config.VoteSettings.EndMapVoteWASDMenu);
+                DoAutoMapVote(caller, Config.VoteSettings.VotingTime, SSMC_ChangeMapTime.ChangeMapTime_Now, GetVoteMenuMode());
             }
         }
     }
@@ -1552,7 +1578,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             timeToVote = Config.VoteSettings.VotingTime;
             VotesCounter = 0;
             voteTimer = AddTimer(1.0f, EndOfVotes, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE);
-            DoAutoMapVote(null!, timeToVote, SSMC_ChangeMapTime.ChangeMapTime_Now, Config.VoteSettings.EndMapVoteWASDMenu);
+            DoAutoMapVote(null!, timeToVote, SSMC_ChangeMapTime.ChangeMapTime_Now, GetVoteMenuMode());
             Logger.LogInformation("Vote Timer started at AdminVoteMapAuto");
         }
         else
@@ -1588,143 +1614,150 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             IsVoteInProgress = true;
             optionCounts.Clear();
             votePlayers.Clear();
+
             if (Config.VoteSettings.YesNoVotePanorama)
             {
                 var voteMenu = new PanoramaVote(this);
-                //"vote.changeornot", HandlerPanoramaVoteForChangeMap, this, Config.OtherSettings.PrintPlayersChoiceInChat);
                 voteMenu.StartVote(Config.VoteSettings.VotingTime, Config.VoteSettings.PanoramaSFUIString, "vote.changeornot.panorama", HandlerPanoramaVotesChangeOrNot, HandlerPanoramaVoteResult);
+                return;
+            }
+
+            var menuMode = GetVoteMenuMode();
+            bool useWasd = menuMode != MenuMode.Chat;
+            bool useChat = menuMode != MenuMode.Wasd;
+
+            if (useWasd)
+            {
+                GlobalWASDMenu = wASDMenu.manager.CreateMenu(_localizer["vote.changeornot"], Config.MenuSettings.FreezePlayerInMenu, true);
+                if (GlobalWASDMenu == null)
+                {
+                    Logger.LogError($"GlobalWASDMenu is null but should not be, something is wrong");
+                    IsVoteInProgress = false;
+                    return;
+                }
+                GlobalWASDMenu.Add(_localizer["vote.yes"], (player, option) =>
+                {
+                    if (!votePlayers.ContainsKey(player.Slot))
+                    {
+                        option.Count++;
+                        wASDMenu.UpdatePlayersCenterHtml();
+                        votePlayers.Add(player.Slot, "Yes");
+                        if (!optionCounts.TryGetValue("Yes", out int count))
+                            optionCounts["Yes"] = 1;
+                        else
+                            optionCounts["Yes"] = count + 1;
+                        if (Config.OtherSettings.PrintPlayersChoiceInChat)
+                        {
+                            PrintToServerChat("player.voteforchange", player.PlayerName);
+                        }
+                        else
+                        {
+                            PrintToPlayerChat(player, "player.voteforchange", player.PlayerName);
+                        }
+                    }
+                    wASDMenu.manager.CloseMenu(player);
+                    if (useChat)
+                        MenuManager.CloseActiveMenu(player);
+                }, "Yes");
+                GlobalWASDMenu.Add(_localizer["vote.no"], (player, option) =>
+                {
+                    if (!votePlayers.ContainsKey(player.Slot))
+                    {
+                        option.Count++;
+                        wASDMenu.UpdatePlayersCenterHtml();
+                        votePlayers.Add(player.Slot, "No");
+                        if (!optionCounts.TryGetValue("No", out int count))
+                            optionCounts["No"] = 1;
+                        else
+                            optionCounts["No"] = count + 1;
+                        if (Config.OtherSettings.PrintPlayersChoiceInChat)
+                        {
+                            PrintToServerChat("player.voteagainstchange", player.PlayerName);
+                        }
+                        else
+                        {
+                            PrintToPlayerChat(player, "player.voteagainstchange", player.PlayerName);
+                        }
+                    }
+                    wASDMenu.manager.CloseMenu(player);
+                    if (useChat)
+                        MenuManager.CloseActiveMenu(player);
+                }, "No");
+            }
+            if (useChat)
+            {
+                GlobalChatMenu = new ChatMenu(_localizer["vote.changeornot"]);
+                if (GlobalChatMenu == null)
+                {
+                    Logger.LogError($"GlobalChatMenu is null but should not be, something is wrong");
+                    IsVoteInProgress = false;
+                    return;
+                }
+                GlobalChatMenu.AddMenuOption(_localizer["vote.yes"], (player, option) =>
+                {
+                    if (!votePlayers.ContainsKey(player.Slot))
+                    {
+                        votePlayers.Add(player.Slot, "Yes");
+                        if (!optionCounts.TryGetValue("Yes", out int count))
+                            optionCounts["Yes"] = 1;
+                        else
+                            optionCounts["Yes"] = count + 1;
+                        if (Config.OtherSettings.PrintPlayersChoiceInChat)
+                        {
+                            PrintToServerChat("player.voteforchange", player.PlayerName);
+                        }
+                        else
+                        {
+                            PrintToPlayerChat(player, "player.voteforchange", player.PlayerName);
+                        }
+                    }
+                    MenuManager.CloseActiveMenu(player);
+                    if (useWasd)
+                        wASDMenu.manager.CloseMenu(player);
+                });
+                GlobalChatMenu.AddMenuOption(_localizer["vote.no"], (player, option) =>
+                {
+                    if (!votePlayers.ContainsKey(player.Slot))
+                    {
+                        votePlayers.Add(player.Slot, "No");
+                        if (!optionCounts.TryGetValue("No", out int count))
+                            optionCounts["No"] = 1;
+                        else
+                            optionCounts["No"] = count + 1;
+                        if (Config.OtherSettings.PrintPlayersChoiceInChat)
+                        {
+                            PrintToServerChat("player.voteagainstchange", player.PlayerName);
+                        }
+                        else
+                        {
+                            PrintToPlayerChat(player, "player.voteagainstchange", player.PlayerName);
+                        }
+                    }
+                    MenuManager.CloseActiveMenu(player);
+                    if (useWasd)
+                        wASDMenu.manager.CloseMenu(player);
+                });
+            }
+
+            var playerEntities = Utilities.GetPlayers().Where(p => IsValidPlayer(p));
+            if (playerEntities != null && playerEntities.Any())
+            {
+                foreach (var player in playerEntities)
+                {
+                    if (!Config.VoteSettings.SpectatorsCanVote && player.Team == CsTeam.Spectator)
+                        continue;
+                    if (useChat && GlobalChatMenu != null)
+                        MenuManager.OpenChatMenu(player, GlobalChatMenu);
+                    if (useWasd && GlobalWASDMenu != null)
+                        wASDMenu.manager.OpenMainMenu(player, GlobalWASDMenu);
+                }
+
+                AddTimer((float)Config.VoteSettings.VotingTime, () => TimerChangeOrNot(), TimerFlags.STOP_ON_MAPCHANGE);
             }
             else
             {
-                if (Config.VoteSettings.EndMapVoteWASDMenu)
-                {
-                    GlobalWASDMenu = wASDMenu.manager.CreateMenu(_localizer["vote.changeornot"], Config.MenuSettings.FreezePlayerInMenu, true);
-                    if (GlobalWASDMenu == null)
-                    {
-                        Logger.LogError($"GlobalWASDMenu is null but should not be, something is wrong");
-                        IsVoteInProgress = false;
-                        return;
-                    }
-                    GlobalWASDMenu.Add(_localizer["vote.yes"], (player, option) =>
-                    {
-                        if (!votePlayers.ContainsKey(player.Slot))
-                        {
-                            option.Count++;
-                            wASDMenu.UpdatePlayersCenterHtml();
-                            votePlayers.Add(player.Slot, "Yes");
-                            if (!optionCounts.TryGetValue("Yes", out int count))
-                                optionCounts["Yes"] = 1;
-                            else
-                                optionCounts["Yes"] = count + 1;
-                            if (Config.OtherSettings.PrintPlayersChoiceInChat)
-                            {
-                                PrintToServerChat("player.voteforchange", player.PlayerName);
-                            }
-                            else
-                            {
-                                PrintToPlayerChat(player, "player.voteforchange", player.PlayerName);
-                            }
-                        }
-                        wASDMenu.manager.CloseMenu(player);
-                    }, "Yes");
-                    GlobalWASDMenu.Add(_localizer["vote.no"], (player, option) =>
-                    {
-                        if (!votePlayers.ContainsKey(player.Slot))
-                        {
-                            option.Count++;
-                            wASDMenu.UpdatePlayersCenterHtml();
-                            votePlayers.Add(player.Slot, "No");
-                            if (!optionCounts.TryGetValue("No", out int count))
-                                optionCounts["No"] = 1;
-                            else
-                                optionCounts["No"] = count + 1;
-                            if (Config.OtherSettings.PrintPlayersChoiceInChat)
-                            {
-                                PrintToServerChat("player.voteagainstchange", player.PlayerName);
-                            }
-                            else
-                            {
-                                PrintToPlayerChat(player, "player.voteagainstchange", player.PlayerName);
-                            }
-                        }
-                        wASDMenu.manager.CloseMenu(player);
-                    }, "No");
-                }
-                else
-                {
-                    GlobalChatMenu = new ChatMenu(_localizer["vote.changeornot"]);
-                    if (GlobalChatMenu == null)
-                    {
-                        Logger.LogError($"GlobalChatMenu is null but should not be, something is wrong");
-                        IsVoteInProgress = false;
-                        return;
-                    }
-                    GlobalChatMenu.AddMenuOption(_localizer["vote.yes"], (player, option) =>
-                    {
-                        if (!votePlayers.ContainsKey(player.Slot))
-                        {
-                            votePlayers.Add(player.Slot, "Yes");
-                            if (!optionCounts.TryGetValue("Yes", out int count))
-                                optionCounts["Yes"] = 1;
-                            else
-                                optionCounts["Yes"] = count + 1;
-                            if (Config.OtherSettings.PrintPlayersChoiceInChat)
-                            {
-                                PrintToServerChat("player.voteforchange", player.PlayerName);
-                            }
-                            else
-                            {
-                                PrintToPlayerChat(player, "player.voteforchange", player.PlayerName);
-                            }
-                        }
-                        MenuManager.CloseActiveMenu(player);
-                    });
-                    GlobalChatMenu.AddMenuOption(_localizer["vote.no"], (player, option) =>
-                    {
-                        if (!votePlayers.ContainsKey(player.Slot))
-                        {
-                            votePlayers.Add(player.Slot, "No");
-                            if (!optionCounts.TryGetValue("No", out int count))
-                                optionCounts["No"] = 1;
-                            else
-                                optionCounts["No"] = count + 1;
-                            if (Config.OtherSettings.PrintPlayersChoiceInChat)
-                            {
-                                PrintToServerChat("player.voteagainstchange", player.PlayerName);
-                            }
-                            else
-                            {
-                                PrintToPlayerChat(player, "player.voteagainstchange", player.PlayerName);
-                            }
-                        }
-                        MenuManager.CloseActiveMenu(player);
-                    });
-                }
-                //            ChangeOrNotMenu.PostSelectAction = PostSelectAction.Close;
-
-                var playerEntities = Utilities.GetPlayers().Where(p => IsValidPlayer(p));
-                if (playerEntities != null && playerEntities.Any())
-                {
-                    foreach (var player in playerEntities)
-                    {
-                        if (!Config.VoteSettings.SpectatorsCanVote && player.Team == CsTeam.Spectator)
-                            continue;
-                        if (Config.VoteSettings.EndMapVoteWASDMenu)
-                        {
-                            wASDMenu.manager.OpenMainMenu(player, GlobalWASDMenu);
-                        }
-                        else if (GlobalChatMenu != null)
-                        {
-                            MenuManager.OpenChatMenu(player, GlobalChatMenu);
-                        }
-                    }
-                    AddTimer((float)Config.VoteSettings.VotingTime, () => TimerChangeOrNot(), TimerFlags.STOP_ON_MAPCHANGE);
-                }
-                else
-                {
-                    Logger.LogError("VotesForChangeMapHandle: No valid players found to open menu for.");
-                    return;
-                }
+                Logger.LogError("VotesForChangeMapHandle: No valid players found to open menu for.");
+                IsVoteInProgress = false;
             }
         }
     }
@@ -1876,7 +1909,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         PrintToServerChat(result);
     }
     //  Автоматически набираются карты для голосования или используются набранные админом и запускается общее голосование
-    private void DoAutoMapVote(CCSPlayerController caller, int timeToMapVote = 20, SSMC_ChangeMapTime changeTime = SSMC_ChangeMapTime.ChangeMapTime_Now, bool wasdmenu = false)
+    private void DoAutoMapVote(CCSPlayerController caller, int timeToMapVote = 20, SSMC_ChangeMapTime changeTime = SSMC_ChangeMapTime.ChangeMapTime_Now, MenuMode menuMode = MenuMode.Wasd)
     {
         string mapNameKey;
         if (!canVote)
@@ -1907,18 +1940,9 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         UpdateLowPlayerMode(false);
         AnnounceVotePool();
         var mapPool = GetActiveMapPool();
-        if (wasdmenu)
-        {
-            ConfigMapsInVote = Config.VoteSettings.MapsInVote;
-            GlobalWASDMenu = wASDMenu.manager.CreateMenu("", Config.MenuSettings.FreezePlayerInMenu, Config.MenuSettings.DisplayVotesCount); //true - display options count
-            if (GlobalWASDMenu == null)
-            {
-                Logger.LogError($"GlobalWASDMenu is null but should bot be, something is wrong");
-                IsVoteInProgress = false;
-                return;
-            }
-        }
-        else
+        bool useWasd = menuMode != MenuMode.Chat;
+        bool useChat = menuMode != MenuMode.Wasd;
+        if (useChat)
         {
             if (Config.VoteSettings.MapsInVote < 6)
             {
@@ -1933,6 +1957,20 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             if (GlobalChatMenu == null)
             {
                 Logger.LogError($"GlobalChatMenu is null but should not be, something is wrong");
+                IsVoteInProgress = false;
+                return;
+            }
+        }
+        if (useWasd)
+        {
+            if (!useChat)
+            {
+                ConfigMapsInVote = Config.VoteSettings.MapsInVote;
+            }
+            GlobalWASDMenu = wASDMenu.manager.CreateMenu("", Config.MenuSettings.FreezePlayerInMenu, Config.MenuSettings.DisplayVotesCount);
+            if (GlobalWASDMenu == null)
+            {
+                Logger.LogError($"GlobalWASDMenu is null but should not be, something is wrong");
                 IsVoteInProgress = false;
                 return;
             }
@@ -2090,7 +2128,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         }
         if (Config.VoteSettings.IncludeNoVote)
         {
-            if (wasdmenu)
+            if (useWasd)
             {
                 GlobalWASDMenu?.Add(_localizer["novote.line"], (player, option) =>
                 {
@@ -2106,9 +2144,11 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                             optionCounts["novote.line"] = count + 1;
                     }
                     wASDMenu.manager.CloseMenu(player);
+                    if (useChat)
+                        MenuManager.CloseActiveMenu(player);
                 }, "novote.line");
             }
-            else
+            if (useChat)
             {
                 GlobalChatMenu?.AddMenuOption(_localizer["novote.line"], (player, option) =>
                 {
@@ -2122,6 +2162,8 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                             optionCounts["novote.line"] = count + 1;
                     }
                     MenuManager.CloseActiveMenu(player);
+                    if (useWasd)
+                        wASDMenu.manager.CloseMenu(player);
                 });
             }
         }
@@ -2132,7 +2174,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
 
         if (canExtendMap)
         {
-            if (wasdmenu)
+            if (useWasd)
             {
                 GlobalWASDMenu?.Add(_localizer["extend.map"], (player, option) =>
                 {
@@ -2150,9 +2192,11 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                         PrintToServerChat("player.choice", player.PlayerName, option.OptionDisplay);
                     }
                     wASDMenu.manager.CloseMenu(player);
+                    if (useChat)
+                        MenuManager.CloseActiveMenu(player);
                 }, "extend.map");
             }
-            else
+            if (useChat)
             {
                 GlobalChatMenu?.AddMenuOption(_localizer["extend.map"], (player, option) =>
                 {
@@ -2168,6 +2212,8 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                         PrintToServerChat("player.choice", player.PlayerName, option.Text);
                     }
                     MenuManager.CloseActiveMenu(player);
+                    if (useWasd)
+                        wASDMenu.manager.CloseMenu(player);
                 });
             }
         }
@@ -2178,7 +2224,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         {
             try
             {
-                if (wasdmenu)
+                if (useWasd)
                 {
                     GlobalWASDMenu?.Add(GetDisplayName(mapsToVote[i]), (player, option) =>
                     {
@@ -2204,9 +2250,11 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                             }
                         }
                         wASDMenu.manager.CloseMenu(player);
+                        if (useChat)
+                            MenuManager.CloseActiveMenu(player);
                     }, mapsToVote[i]);
                 }
-                else
+                if (useChat)
                 {
                     GlobalChatMenu?.AddMenuOption(GetDisplayName(mapsToVote[i]), (player, option) =>
                     {
@@ -2230,6 +2278,8 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                             }
                         }
                         MenuManager.CloseActiveMenu(player);
+                        if (useWasd)
+                            wASDMenu.manager.CloseMenu(player);
                     });
                 }
             }
@@ -2240,7 +2290,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             }
         }
 
-        if (!wasdmenu && GlobalChatMenu != null)
+        if (useChat && GlobalChatMenu != null)
         {
             GlobalChatMenu.PostSelectAction = CounterStrikeSharp.API.Modules.Menu.PostSelectAction.Close;
         }
@@ -2252,12 +2302,10 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         {
             if (!Config.VoteSettings.SpectatorsCanVote && player.Team == CsTeam.Spectator)
                 continue;
-            if (wasdmenu)
-            {
-                TryOpenWASDMenu(player);
-            }
-            else
+            if (useChat && GlobalChatMenu != null)
                 MenuManager.OpenChatMenu(player, GlobalChatMenu!);
+            if (useWasd)
+                TryOpenWASDMenu(player);
             if (playSound)
                 player.ExecuteClientCommand("play " + Config.OtherSettings.VoteStartSound);
         }
@@ -2655,7 +2703,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         {
             MenuManager.OpenChatMenu(caller, GlobalChatMenu);
         }
-        else if (GlobalWASDMenu != null)
+        if (GlobalWASDMenu != null)
         {
             if (!string.IsNullOrEmpty(voteResult))
             {
@@ -2742,7 +2790,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         if (voteTimer == null)
         {
             voteTimer = AddTimer(1.0f, EndOfVotes, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE);
-            DoAutoMapVote(null!, timeToVote, SSMC_ChangeMapTime.ChangeMapTime_MapEnd, Config.VoteSettings.EndMapVoteWASDMenu);
+            DoAutoMapVote(null!, timeToVote, SSMC_ChangeMapTime.ChangeMapTime_MapEnd, GetVoteMenuMode());
             Logger.LogInformation("Vote Timer started at MapVoteCommand");
         }
         else
@@ -2774,7 +2822,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         if (voteTimer == null)
         {
             voteTimer = AddTimer(1.0f, EndOfVotes, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE);
-            DoAutoMapVote(null!, timeToVote, SSMC_ChangeMapTime.ChangeMapTime_Now, Config.VoteSettings.EndMapVoteWASDMenu);
+            DoAutoMapVote(null!, timeToVote, SSMC_ChangeMapTime.ChangeMapTime_Now, GetVoteMenuMode());
             Logger.LogInformation("Vote Timer started at MapVoteChangeCommand");
         }
         else
@@ -3077,13 +3125,16 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             UpdateLowPlayerMode(false);
             if (!Config.VoteSettings.SpectatorsCanVote && player.Team == CsTeam.Spectator)
                 return;
-            if (Config.VoteSettings.NominationsWASDMenu)
+            var menuMode = GetNominationMenuMode();
+            bool useWasd = menuMode != MenuMode.Chat;
+            bool useChat = menuMode != MenuMode.Wasd;
+            if (useWasd)
             {
                 IWasdMenu nominate_menu = CreateMapsMenuWASD(Handle_Nominations, player, Config.MenuSettings.FreezePlayerInMenu, true, true);
                 if (nominate_menu != null)
                     wASDMenu.manager.OpenMainMenu(player, nominate_menu);
             }
-            else
+            if (useChat)
             {
                 ChatMenu chatMenu = CreateMapsMenu(Handle_NominationsChat, player, true, true);
                 if (chatMenu != null)
@@ -3101,6 +3152,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         TryNominate(player, GetMapKeyByDisplayNameOrKey(option.OptionDisplay));
 
         wASDMenu.manager.CloseMenu(player);
+        MenuManager.CloseActiveMenu(player);
     }
     private void Handle_NominationsChat(CCSPlayerController player, ChatMenuOption option)
     {
@@ -3109,6 +3161,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
 
         TryNominate(player, GetMapKeyByDisplayNameOrKey(option.Text));
         MenuManager.CloseActiveMenu(player);
+        wASDMenu.manager.CloseMenu(player);
     }
     private Nominations GGMC_Nominate(string map, CCSPlayerController player)
     {
@@ -3418,7 +3471,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             CleanRTVArrays();
             Logger.LogInformation("Starting RTV vote");
             MakeRTVTimer(Config.RTVSettings.IntervalBetweenRTV);
-            DoAutoMapVote(null!, Config.VoteSettings.VotingTime, SSMC_ChangeMapTime.ChangeMapTime_Now, Config.VoteSettings.EndMapVoteWASDMenu);
+            DoAutoMapVote(null!, Config.VoteSettings.VotingTime, SSMC_ChangeMapTime.ChangeMapTime_Now, GetVoteMenuMode());
         }
         else
         {
@@ -3658,6 +3711,12 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         NotNow,
         Error
     };
+    public enum MenuMode
+    {
+        Wasd = 0,
+        Chat = 1,
+        Both = 2
+    }
     public async Task SendWebhookMessage(string message)
     {
         if (string.IsNullOrWhiteSpace(message))
@@ -3999,13 +4058,13 @@ public class VoteSettings
     [JsonPropertyName("AllowNominate")]
     public bool AllowNominate { get; set; } = true;
 
-    /* Nominations in WASD menu */
-    [JsonPropertyName("NominationsWASDMenu")]
-    public bool NominationsWASDMenu { get; set; } = true;
+    /* Nominations menu mode: "wasd", "chat", or "both" */
+    [JsonPropertyName("NominationsMenuMode")]
+    public string NominationsMenuMode { get; set; } = "";
 
-    /* End of Map Vote in WASD menu */
-    [JsonPropertyName("EndMapVoteWASDMenu")]
-    public bool EndMapVoteWASDMenu { get; set; } = true;
+    /* End of map vote menu mode: "wasd", "chat", or "both" */
+    [JsonPropertyName("EndMapVoteMenuMode")]
+    public string EndMapVoteMenuMode { get; set; } = "";
 
     /* Yes/No Vote (to change map or not) in Panorama menu */
     [JsonPropertyName("YesNoVotePanorama")]
