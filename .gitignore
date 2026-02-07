@@ -4,6 +4,7 @@
 #     https://www.atlassian.com/git/tutorials/saving-changes/gitignore
 
 ggmcAPI/
+shared/
 
 # Node artifact files
 node_modules/

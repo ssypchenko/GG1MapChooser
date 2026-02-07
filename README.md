@@ -11,13 +11,19 @@
 <ul>
     <li><strong>Map Voting System</strong> - Players can vote on which maps to play next. If no one votes, the plugin chooses a random map from the list.</li>
     <li><strong>Rock The Vote (rtv)</strong> - Players can request to start a vote for a new map during the game.</li>
-    <li><strong>Map Nominations</strong> - Players can nominate maps for voting.</li>
+    <li><strong>Map Nominations</strong> - Players can nominate maps for voting (one active nomination per player).</li>
+    <li><strong>Nomination Cooldown</strong> - Recently nominated maps can be locked for a number of maps (cooldown).</li>
     <li><strong>Player Count Thresholds</strong> - Specify minimum and maximum player counts for maps to be included in the vote.</li>
     <li><strong>Map display names</strong> - Maps can have nice display names in the settings file, for example "Mini Circular" instead of "gg_mini_circular" which is the workshop name.</li>
     <li><strong>Map Weights</strong> - Randomly selects maps to vote for the next map with configurable weights. The higher the weight, the more likely the map will be included in the vote list.</li>
-    <li><strong>Admin Commands</strong> - Includes commands for admins to start voting, to vote if players want to change the map, to simply change or set the next map .</li>
+    <li><strong>Extend Map Limit</strong> - Limit how many times a map can be extended.</li>
+    <li><strong>Menu Modes</strong> - Voting and nominations can use WASD, Chat, or Both menus to avoid HUD conflicts.</li>
+    <li><strong>Map Pools & Pool Voting</strong> - Multiple pools can be configured; players can vote for a pool during the map.</li>
+    <li><strong>Low-Player Pool</strong> - Use a separate pool when player count (including spectators) is below a threshold.</li>
+    <li><strong>No Vote Line</strong> - Optional "No vote" line to prevent accidental selection.</li>
+    <li><strong>Admin Commands</strong> - Includes commands for admins to start voting, to vote if players want to change the map, to simply change or set the next map, and to switch/start pool votes.</li>
     <li><strong>Map load at the game end</strong> - If this set in the config, plugin will be responsible for the load of the winning in vote map.</li>
-    <li><strong>Maps log in Discord</strong> - Voted or/and Loaded map can be logged in a Discord text channel with configurable template.</li> 
+    <li><strong>Maps log in Discord</strong> - Voted or/and Loaded map can be logged in a Discord text channel with configurable template.</li>
 </ul>
 
 <h2>Configuration Files</h2>
@@ -32,11 +38,38 @@
     <li>For Workshop maps, set the workshop map ID to use maps without a collection.</li>
 </ul>
 
+<p><strong>Map Pools (NEW)</strong> - You can wrap maps into pools. The active pool is used by RTV and end-of-map votes.</p>
+<pre><code>{
+  "Pool A": {
+    "de_mirage": {
+      "ws": false,
+      "display": "Mirage",
+      "mapid": "",
+      "minplayers": 0,
+      "maxplayers": 0,
+      "weight": 1
+    }
+  },
+  "Pool B": {
+    "workshop_map": {
+      "ws": true,
+      "display": "My Workshop Map",
+      "mapid": "1234567890",
+      "minplayers": 0,
+      "maxplayers": 0,
+      "weight": 1
+    }
+  }
+}
+</code></pre>
+<p>Legacy format is still supported. If no pools are defined, the whole file is treated as one pool named <code>default</code>.</p>
+
 <h3>Plugin Settings</h3>
 <p>Customize plugin behaviour in <code>csgo/addons/counterstrikesharp/configs/plugins/GG1MapChooser/GG1MapChooser.json</code>.<br>Config file is divided into sections to simplify plugin configuration:</p>
 <ul>
     <li>VoteSettings - describe the process of voting itself.</li>
     <li>RTVSettings - specific settings for Rock the Vote.</li>
+    <li>PoolVoteSettings - settings for map pool voting.</li>
     <li>WinDrawSettings - voting settings which depends of Rounds Wins</li>
     <li>TimeLimitSettings - voting settings which depends of Map TimeLimit if set (mp_timelimit cvar)</li>
     <li>DiscordSettings - to define reporting to Discord behaviour.</li>
@@ -46,16 +79,19 @@
 <p><b>VoteSettings</b><br>
 <ul>
     <li><code>RememberPlayedMaps</code> - Number of recent maps to exclude from upcoming votes.</li>
+    <li><code>RememberNominatedMaps</code> - Number of maps to keep in nomination cooldown (0 disables).</li>
     <li><code>MapsInVote</code> - Number of maps in the voting pool <em>(5 is the recommended value)</em>.</li>
     <li><code>VotesToWin</code> - Percentage of votes needed to win the vote <em>(0.6 (60%) is the recommended value)</em>.</li>
     <li><code>AllowNominate</code> - Allow Nomination.</li>
-    <li><code>NominationsWASDMenu</code> - Nomination in WASD menu (true) (navigation by buttons W (up), S (down), A (previous menu), E ("use" command - select menu item), R ("reload" command to exit)) or in Chat Menu (false).</li>
-    <li><code>EndMapVoteWASDMenu</code> - End of Map Vote in WASD menu (true) or in Chat menu (false).</li>
+    <li><code>NominationsMenuMode</code> - Nomination menu mode: <code>wasd</code>, <code>chat</code>, or <code>both</code>. Replaces <code>NominationsWASDMenu</code>.</li>
+    <li><code>EndMapVoteMenuMode</code> - End of Map Vote menu mode: <code>wasd</code>, <code>chat</code>, or <code>both</code>. Replaces <code>EndMapVoteWASDMenu</code>.</li>
     <li><code>VotingTime</code> - Duration for players to cast their votes. Can be overridden in console commands.</li>
     <li><code>ExtendMapInVote</code> - Set to true to add the "Extend Map" menu item. It increases the "mp_timelimit" variable.</li>
     <li><code>ExtendMapTimeMinutes</code> - Time in minutes to increase the "mp_timelimit" variable.</li>
+    <li><code>MaxExtendMapCount</code> - Maximum number of times a map can be extended (0 = unlimited).</li>
     <li><code>ChangeMapAfterVote</code> - Plugin will Change the Map immediately after the vote.</li>
     <li><code>SpectatorsCanVote</code> - Set false if you want to prevent spectators from voting.</li>
+    <li><code>IncludeNoVote</code> - Adds "No vote" line to prevent accidental selection.</li>
 </ul></p>
 <p><b>RTVSettings</b><br>
 <ul>
@@ -63,6 +99,18 @@
     <li><code>RTVDelayFromStart</code> - Time delay from the start of the map during which RTV is disabled.</li>
     <li><code>IntervalBetweenRTV</code> - Cooldown period after a failed vote.</li>
     <li><code>NoRTVafterRoundsPlayed</code> - Set number of rounds from the map start when rtv can't be called. 0 - to disable this feature</li>
+</ul></p>
+<p><b>PoolVoteSettings</b><br>
+<ul>
+    <li><code>Enable</code> - Allow pool vote.</li>
+    <li><code>DefaultPool</code> - Default pool name. If empty or not found, the first pool is used.</li>
+    <li><code>DelayFromStart</code> - Time delay from the start of the map during which pool vote is disabled.</li>
+    <li><code>IntervalBetweenVotes</code> - Cooldown period after a failed pool vote.</li>
+    <li><code>VotesToWin</code> - Percentage of votes needed to start pool vote (0 uses VoteSettings.VotesToWin).</li>
+    <li><code>VotingTime</code> - Time to vote for a pool.</li>
+    <li><code>BlockBeforeMapVoteSeconds</code> - Block pool vote X seconds before map vote (TimeLimit mode).</li>
+    <li><code>BlockBeforeMapVoteRounds</code> - Block pool vote X rounds before map vote (RoundWins mode).</li>
+    <li><code>MenuMode</code> - Pool vote menu mode: <code>wasd</code>, <code>chat</code>, or <code>both</code>.</li>
 </ul></p>
 <p><b>WinDrawSettings</b><br>
 <ul>
@@ -93,7 +141,8 @@
     <li><code>SoundInMenu</code> - Turns on (true) / off (false) sounds in menu for navigation between options, open and close menu.</li>
     <li><code>FreezePlayerInMenu</code> - If true, a player will be frozen while navigating the menu.</li>
     <li><code>FreezeAdminInMenu</code> - If true, an admin will be frozen while navigating the menu.</li>
-    <li><code>ScrollUp</code>, <code>ScrollDown</code>, <code>Choose</code>, <code>Back</code>, <code>Exit</code> - keys or commands for menu.</li> 
+    <li><code>FreezeMode</code> - Mode of Freeze player in menu: 1 - MOVETYPE_OBSOLETE, 2 - MOVETYPE_NONE, 3 - MOVETYPE_INVALID.</li>
+    <li><code>ScrollUp</code>, <code>ScrollDown</code>, <code>Choose</code>, <code>Back</code>, <code>Exit</code> - keys or commands for menu.</li>
 </ul></p>
 <p><b>OtherSettings</b><br>
 <ul>
@@ -106,7 +155,9 @@
     <li><code>LastDisconnectedChangeMap</code> - Switch to a random map after the last player disconnects.</li>
     <li><code>WorkshopMapProblemCheck</code> - Checks whether the voted or admin-chosen map is loaded and if not (in case of problems with the workshop map) loads a random map.</li>
     <li><code>TvStopRecord</code> - set true to execute server command to stop tv record before the map change to avoid possible crashes.</li>
-    <li><code>DefaultMapWeight</code> - By default a map weight is 1 if it is not actually set for the map. Maps with higher weights have more chances to be selected in the voting list. For Map Rating plugin the default weight can be set to 3, so players can rate the map higher (4 or 5) to increase chances or lower (0 - 2) to decrease chances.</li> 
+    <li><code>DefaultMapWeight</code> - By default a map weight is 1 if it is not actually set for the map. Maps with higher weights have more chances to be selected in the voting list. For Map Rating plugin the default weight can be set to 3, so players can rate the map higher (4 or 5) to increase chances or lower (0 - 2) to decrease chances.</li>
+    <li><code>LowPlayerMaxPlayers</code> - Max players (including spectators) to use LowPlayerMaps.</li>
+    <li><code>LowPlayerMaps</code> - Map list used when player count is below LowPlayerMaxPlayers.</li>
 </ul></p>
 
 <h3>Discord message Configuration</h3>
@@ -115,13 +166,14 @@
     <li>The config file will be automatically created if not exists.</li>
     <li>You can modify or localize the text: <code>content = "Next map: "</code></li>
     <li>If you want to display map pictures in the messages you need to specifying the resource’s address: <code>url = "https://example.com/folder/with/mapimages/"</code></li>
-    <li>Map images must follow the naming convention <mapname> plus extension defined in "PictureExtension", matching exactly with the map names used in the Workshop and in GGMCmaps.json</li>
+    <li>Map images must follow the naming convention &lt;mapname&gt; plus extension defined in "PictureExtension", matching exactly with the map names used in the Workshop and in GGMCmaps.json</li>
 </ul>
 
 <h2>Usage</h2>
 <ul>
     <li><strong>Voting:</strong> Players can initiate a map vote using <code>!rtv</code> or <code>rtv</code> in chat. The required percentage of votes to start a vote is controlled by the <code>VotesToWin</code> setting.</li>
-    <li><strong>Nominating:</strong> Players can nominate a map by typing <code>!nominate &lt;mapname&gt;</code> or simply <code>nominate</code> to bring up a list of eligible maps based on current server conditions.</li>
+    <li><strong>Pool Voting:</strong> Players can initiate a pool vote using <code>!rtm</code> or <code>rtm</code> in chat (or <code>css_rtm</code> in console).</li>
+    <li><strong>Nominating:</strong> Players can nominate a map by typing <code>!nominate &lt;mapname&gt;</code> or simply <code>nominate</code> (alias: <code>yd</code>).</li>
     <li><strong>Re-Vote:</strong> After the vote has been taken, or if the voting menu has been accidentally closed, players can revote using the "!revote" command in chat.</li>
 </ul>
 
@@ -167,14 +219,16 @@
 <h3>Player Commands:</h3>
 <ul>
     <li><code>rtv</code> - Rock The Vote - express players wish to change the map.</li>
+    <li><code>rtm</code> - Vote for map pool (chat command; console alias: <code>css_rtm</code>).</li>
     <li><code>nominate</code> - Players can select maps they want to see in the next vote executed by rtv or the the game end. Nominated maps will be in the list only if they suite other conditions - number of players on the server or recently played.</li>
+    <li><code>yd</code> - Nomination alias for Chinese users.</li>
     <li><code>revote</code> - If a player changed his mind or a menu was accidentally closed, player can reopen the menu with the revote command and vote.</li>
     <li><code>nextmap</code> - Displays the map selected in the vote.</li>
     <li><code>timeleft</code> - Displays the timeleft in case of the time limit mode.</li>
 </ul>
 <h3>Admin Commands</h3>
 <ul>
-    <li><strong>Map Change:</strong> Use <code>css_maps</code> or <code>!maps</code> to open a menu with options: simply change the map (manually choose or automatic selection); start a vote with automatic or custom selections; start a vote to see if players agree to change the map; set the next map.</li>
+    <li><strong>Map Change:</strong> Use <code>css_maps</code> or <code>!maps</code> to open a menu with options: simply change the map (manually choose or automatic selection); start a vote with automatic or custom selections; start a vote to see if players agree to change the map; set the next map; switch pool; start pool vote.</li>
     <li>Players or admins confirm WASD menu options using the “E” button (“use” command).</li>
     <li><strong>Quick Map Selection:</strong> Use <code>ggmap &lt;partofmapname&gt;</code> to quickly find and switch to a map using a partial name match. Or you can use <code>ggmap &lt;exactmapname&gt;</code> as a server command to change a map from external scripts or plugins.</li>
     <li><code>setnextmap</code> - Command to set the next map without voting.</li>
@@ -200,6 +254,10 @@
     <li>If maps are not from the collection, please fill in the "mapid" parameter with the map number in the map list.</li>
     <li>If a map ID is set for the workshop map, the plugin will use it to change the map. If the map ID is not set, the plugin will try to change the map by the name, but if it is not included in the collection assigned to the server - nothing will happen. Workshop maps that are not from the collection cannot be used to set "nextlevel" when using the "ggmc_mapvote_start" command.</li>
     <li>Even if a map ID is set for the workshop map, it is important to have the name the maps exactly the same as it is in the Workshop. Otherwise, you won't be able to use the WorkshopMapProblemCheck feature to check if the requested map is loaded or if it is missing in the workshop, because the map owner can delete the map at any time.</li>
+    <li>Pool vote requires at least two pools. If the result is a tie or the same pool wins, the current pool stays active.</li>
+    <li>Pool vote must happen before end-of-map vote. It can be blocked by <code>BlockBeforeMapVoteSeconds</code> or <code>BlockBeforeMapVoteRounds</code>.</li>
+    <li>If both <code>VoteDependsOnTimeLimit</code> and <code>VoteDependsOnRoundWins</code> are enabled (or both disabled), pool vote is disabled to avoid conflicts.</li>
+    <li>Low-player pool is separate from normal pools and does not appear in regular votes.</li>
 </ul>
 
 <h2>Plugin Compilation</h2>

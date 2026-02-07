@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Data;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 using System.Net.Http.Headers;
@@ -80,6 +81,11 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                 Logger.LogInformation($"VoteDependsOnTimeLimit: TriggerSecondsBeforeEnd updates to {Config.VoteSettings.VotingTime + 6} which is minimum value for VotingTime {Config.VoteSettings.VotingTime} in config plus time to change the map.");
             }
         }
+        _poolVoteConfigInvalid = Config.TimeLimitSettings.VoteDependsOnTimeLimit == Config.WinDrawSettings.VoteDependsOnRoundWins;
+        if (_poolVoteConfigInvalid && Config.PoolVoteSettings.Enable)
+        {
+            Logger.LogWarning("Pool vote disabled: TimeLimit and RoundWins vote modes must not be both enabled or both disabled.");
+        }
         BuildLowPlayerMapIndex();
         UpdateLowPlayerMode(false);
         wASDMenu.ReadButtons();
@@ -88,6 +94,8 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     private Random random = new();
     private string mapsFilePath = "";
     public Dictionary<string, MapInfo> Maps_from_List = new Dictionary<string, MapInfo>();
+    private Dictionary<string, Dictionary<string, MapInfo>> MapPools = new Dictionary<string, Dictionary<string, MapInfo>>(StringComparer.OrdinalIgnoreCase);
+    private string ActivePoolName = "";
     private Dictionary<string, string> DisplayNameToKeyMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, string> LowDisplayNameToKeyMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     private List<string> maplist = new();
@@ -101,6 +109,14 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     private DateTime rtvCooldownStartTime;
     private int rtvCoolDownDuration;
     private int rtvRestartProblems = 0;
+    private bool canPoolVote { get; set; } = true;
+    private int poolvote_need_more { get; set; }
+    private DateTime poolVoteCooldownStartTime;
+    private int poolVoteCoolDownDuration;
+    private int poolVoteRestartProblems = 0;
+    public bool IsPoolVoteInProgress { get; set; } = false;
+    private bool _poolVoteConfigInvalid = false;
+    private bool _mapVoteQueued = false;
     private bool _runVoteRoundEnd = false;
     private Timer? changeRequested = null;
     private Timer? voteEndChange = null;
@@ -121,10 +137,15 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     private DateTime timeLimitStartEventTime = DateTime.MinValue;
     public ChatMenu? GlobalChatMenu { get; set; } = null;
     public IWasdMenu? GlobalWASDMenu { get; set; } = null;
+    public ChatMenu? PoolChatMenu { get; set; } = null;
+    public IWasdMenu? PoolWASDMenu { get; set; } = null;
     public WASDMenu wASDMenu { get; set; }
 //    public WasdMenuMM WASDMenuMM { get; set; }
     private Dictionary<string, int> optionCounts = new Dictionary<string, int>();
+    private Dictionary<string, int> poolOptionCounts = new Dictionary<string, int>();
     private Timer? voteTimer = null;
+    private Timer? poolVoteTimer = null;
+    private Dictionary<int, string> poolVotePlayers = new Dictionary<int, string>();
     //    public string EmergencyMap { get; set; } = "";
     private Player[] players = new Player[65];
     int timeToVote = 20;
@@ -471,8 +492,13 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         SimpleKillTimer(_timeLimitMapChangeTimer);
         _timeLimitMapChangeTimer = null;
         KillRTVtimer();
+        KillPoolVoteTimer();
         SimpleKillTimer(voteEndTimer);
         voteEndTimer = null;
+        SimpleKillTimer(poolVoteTimer);
+        poolVoteTimer = null;
+        PoolChatMenu = null;
+        PoolWASDMenu = null;
         SimpleKillTimer(timersLog);
         timersLog = null;
     }
@@ -525,6 +551,10 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                     //                    AddTimer(1.0f, () => {
                     MakeRTVTimer(Config.RTVSettings.RTVDelayFromStart);
                     //                    });
+                }
+                if (Config.PoolVoteSettings.Enable && !_poolVoteConfigInvalid && Config.PoolVoteSettings.DelayFromStart > 0)
+                {
+                    MakePoolVoteTimer(Config.PoolVoteSettings.DelayFromStart);
                 }
                 if (Config.TimeLimitSettings.VoteDependsOnTimeLimit)
                 {
@@ -844,18 +874,82 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                 Logger.LogError("[GGMC] Error: GGMCmaps.json file is empty.");
                 return false;
             }
-
-            var deserializedDictionary = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, MapInfo>>(jsonString);
-
-            // Check if deserialization was successful and the result is not null
-            if (deserializedDictionary != null)
+            MapPools.Clear();
+            using var doc = JsonDocument.Parse(jsonString);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object)
             {
-                Maps_from_List = deserializedDictionary;
+                Logger.LogError("[GGMC] Error: GGMCmaps.json root element must be an object.");
+                return false;
+            }
+            bool oldFormat = false;
+            foreach (var prop in doc.RootElement.EnumerateObject())
+            {
+                if (prop.Value.ValueKind == JsonValueKind.Object)
+                {
+                    if (prop.Value.TryGetProperty("ws", out _)
+                        || prop.Value.TryGetProperty("mapid", out _)
+                        || prop.Value.TryGetProperty("display", out _)
+                        || prop.Value.TryGetProperty("minplayers", out _)
+                        || prop.Value.TryGetProperty("maxplayers", out _)
+                        || prop.Value.TryGetProperty("weight", out _))
+                    {
+                        oldFormat = true;
+                    }
+                }
+                break;
+            }
+
+            if (oldFormat)
+            {
+                var deserializedDictionary = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, MapInfo>>(jsonString);
+                if (deserializedDictionary == null || deserializedDictionary.Count == 0)
+                {
+                    Logger.LogError("[GGMC] Error: GGMCmaps.json deserialization failed, resulting in null or empty MapList.");
+                    return false;
+                }
+                MapPools["default"] = deserializedDictionary;
+                string selectedPool = (!string.IsNullOrEmpty(ActivePoolName) && MapPools.ContainsKey(ActivePoolName))
+                    ? ActivePoolName
+                    : "default";
+                if (!SetActivePool(selectedPool, false, false))
+                {
+                    Logger.LogError("[GGMC] Error: failed to set active pool from old format.");
+                    return false;
+                }
             }
             else
             {
-                Logger.LogError("[GGMC] Error: GGMCmaps.json deserialization failed, resulting in null MapList.");
-                return false;
+                var deserializedPools = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, MapInfo>>>(jsonString);
+                if (deserializedPools == null || deserializedPools.Count == 0)
+                {
+                    Logger.LogError("[GGMC] Error: GGMCmaps.json deserialization failed, resulting in null or empty pool list.");
+                    return false;
+                }
+                foreach (var pool in deserializedPools)
+                {
+                    if (pool.Value != null && pool.Value.Count > 0)
+                    {
+                        MapPools[pool.Key] = pool.Value;
+                    }
+                }
+                if (MapPools.Count == 0)
+                {
+                    Logger.LogError("[GGMC] Error: GGMCmaps.json does not contain any valid pools.");
+                    return false;
+                }
+                string selectedPool = ActivePoolName;
+                if (string.IsNullOrEmpty(selectedPool) || !MapPools.ContainsKey(selectedPool))
+                {
+                    string desiredPool = Config.PoolVoteSettings.DefaultPool;
+                    selectedPool = (!string.IsNullOrEmpty(desiredPool) && MapPools.ContainsKey(desiredPool))
+                        ? desiredPool
+                        : MapPools.Keys.First();
+                }
+                if (!SetActivePool(selectedPool, false, false))
+                {
+                    Logger.LogError($"[GGMC] Error: failed to set active pool '{selectedPool}'.");
+                    return false;
+                }
             }
         }
         catch (Exception ex)
@@ -863,21 +957,40 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             Logger.LogError($"[GGMC] Error reading or deserializing GGMCmaps.json file: {ex.Message}");
             return false;
         }
+        return mapstotal > 0;
+    }
+    private bool SetActivePool(string poolName, bool announce, bool clearState)
+    {
+        if (!MapPools.TryGetValue(poolName, out var pool) || pool.Count == 0)
+        {
+            Logger.LogError($"[GGMC] Pool '{poolName}' not found or empty.");
+            return false;
+        }
+        ActivePoolName = poolName;
+        Maps_from_List = pool;
+        BuildDisplayNameToKeyMap(Maps_from_List);
+        maplist = Maps_from_List.Keys.ToList();
+        mapstotal = maplist.Count;
+        if (clearState)
+        {
+            ClearPoolState();
+        }
+        if (announce)
+        {
+            PrintToServerChat("poolvote.changed", poolName);
+        }
+        return mapstotal > 0;
+    }
+    private void BuildDisplayNameToKeyMap(Dictionary<string, MapInfo> mapPool)
+    {
         DisplayNameToKeyMap.Clear();
-        foreach (var mapInfo in Maps_from_List)
+        foreach (var mapInfo in mapPool)
         {
             if (!string.IsNullOrEmpty(mapInfo.Value.Display))
             {
                 DisplayNameToKeyMap[mapInfo.Value.Display] = mapInfo.Key;
             }
         }
-        maplist = Maps_from_List.Keys.ToList();
-        mapstotal = maplist.Count;
-        if (mapstotal > 0)
-        {
-            return true;
-        }
-        return false;
     }
     private void BuildLowPlayerMapIndex()
     {
@@ -969,10 +1082,20 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     {
         return ParseMenuMode(Config.VoteSettings.NominationsMenuMode);
     }
+    private MenuMode GetPoolVoteMenuMode()
+    {
+        return ParseMenuMode(Config.PoolVoteSettings.MenuMode);
+    }
     //Start vote at the beginning of the round according to rules of Round Manager
     private void StartVote()
     {
         Logger.LogInformation("Vote started according to Round Manager Rules or TimeLimit Timer");
+        if (IsPoolVoteInProgress)
+        {
+            _mapVoteQueued = true;
+            Logger.LogInformation("StartVote: Pool vote in progress, queue map vote.");
+            return;
+        }
         if (IsVoteInProgress)
         {
             Logger.LogInformation("MapVoteCommand: Another vote active when mapvote start. Skip votes");
@@ -981,6 +1104,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
 
         if (voteTimer == null)
         {
+            _mapVoteQueued = false;
             IsVoteInProgress = true;
             roundsManager.MaxRoundsVoted = true;
             timeToVote = Config.VoteSettings.VotingTime;
@@ -1193,13 +1317,19 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             }
         }, TimerFlags.STOP_ON_MAPCHANGE);
     }
-    private bool TryGetMapInfo(string mapname, out MapInfo mapInfo)
+    private bool TryGetMapInfo(string mapname, [NotNullWhen(true)] out MapInfo? mapInfo)
     {
-        if (Maps_from_List.TryGetValue(mapname, out mapInfo))
+        if (Maps_from_List.TryGetValue(mapname, out var info) && info != null)
+        {
+            mapInfo = info;
             return true;
-        if (Config.OtherSettings.LowPlayerMaps != null && Config.OtherSettings.LowPlayerMaps.TryGetValue(mapname, out mapInfo))
+        }
+        if (Config.OtherSettings.LowPlayerMaps?.TryGetValue(mapname, out info) == true && info != null)
+        {
+            mapInfo = info;
             return true;
-        mapInfo = null!;
+        }
+        mapInfo = null;
         return false;
     }
     private int WeightedMap(int validmaps, int[] validmapweight, int choice)
@@ -1546,7 +1676,11 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             {
                 caller.PrintToChat(Localizer["vote.notenough"]);
             }
-            if (IsVoteInProgress)
+            if (IsPoolVoteInProgress)
+            {
+                PrintToPlayerChat(caller, "poolvote.inprogress");
+            }
+            else if (IsVoteInProgress)
             {
                 caller.PrintToChat(Localizer["vote.inprogress"]);
             }
@@ -1562,6 +1696,15 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     {
         wASDMenu.manager.CloseMenu(player);
         Logger.LogInformation($"[GGMC]: Admin {player.PlayerName} started vote auto.");
+        if (IsPoolVoteInProgress)
+        {
+            Logger.LogInformation($"AdminVoteMapAuto: Pool vote in progress, skip votes.");
+            if (IsValidPlayer(player))
+            {
+                PrintToPlayerChat(player, "poolvote.inprogress");
+            }
+            return;
+        }
         if (IsVoteInProgress)
         {
             Logger.LogInformation($"AdminVoteMapAuto: Another vote active when admin {player.PlayerName} started votes. Skip votes");
@@ -1592,7 +1735,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         if (IsValidPlayer(caller))
         {
             wASDMenu.manager.CloseMenu(caller);
-            if (IsVoteInProgress)
+            if (IsVoteInProgress || IsPoolVoteInProgress)
             {
                 using (new WithTemporaryCulture(caller.GetLanguage()))
                 {
@@ -1860,6 +2003,74 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                 wASDMenu.manager.OpenMainMenu(player, acmm_menu);
         }
         return;
+    }
+    private void AdminPoolSwitchHandle(CCSPlayerController caller, IWasdMenuOption option)
+    {
+        if (!IsValidPlayer(caller))
+            return;
+        if (MapPools.Count == 0)
+        {
+            PrintToPlayerChat(caller, "poolvote.notenoughpools");
+            return;
+        }
+        IWasdMenu? poolMenu;
+        using (new WithTemporaryCulture(caller.GetLanguage()))
+        {
+            poolMenu = wASDMenu.manager.CreateMenu(_localizer["pool.switch.title"], Config.MenuSettings.FreezeAdminInMenu);
+        }
+        foreach (var pool in MapPools.Keys)
+        {
+            string poolName = pool;
+            poolMenu.Add(poolName, Handle_AdminPoolSwitch);
+        }
+        poolMenu.Prev = option.Parent?.Options?.Find(option);
+        wASDMenu.manager.OpenSubMenu(caller, poolMenu);
+    }
+    private void Handle_AdminPoolSwitch(CCSPlayerController player, IWasdMenuOption option)
+    {
+        if (!IsValidPlayer(player) || option == null || option.OptionDisplay == null)
+            return;
+        if (IsPoolVoteInProgress)
+        {
+            PrintToPlayerChat(player, "poolvote.inprogress");
+            return;
+        }
+        if (IsVoteInProgress)
+        {
+            PrintToPlayerChat(player, "vote.inprogress");
+            return;
+        }
+        string poolName = option.OptionDisplay;
+        wASDMenu.manager.CloseMenu(player);
+        if (SetActivePool(poolName, true, true))
+            return;
+        PrintToPlayerChat(player, "poolvote.notenoughpools");
+    }
+    private void AdminPoolVoteHandle(CCSPlayerController caller, IWasdMenuOption option)
+    {
+        if (!IsValidPlayer(caller))
+            return;
+        if (IsPoolVoteInProgress)
+        {
+            PrintToPlayerChat(caller, "poolvote.inprogress");
+            return;
+        }
+        if (IsVoteInProgress)
+        {
+            PrintToPlayerChat(caller, "vote.inprogress");
+            return;
+        }
+        if (!IsPoolVoteAllowed(out string reasonKey))
+        {
+            if (!string.IsNullOrEmpty(reasonKey))
+                PrintToPlayerChat(caller, reasonKey);
+            return;
+        }
+        Logger.LogInformation($"[GGMC]: Admin {caller.PlayerName} started pool vote.");
+        IsPoolVoteInProgress = true;
+        CleanPoolVoteArrays();
+        MakePoolVoteTimer(Config.PoolVoteSettings.IntervalBetweenVotes);
+        StartPoolVoteMenu();
     }
     private void Handle_AdminSetNextMap(CCSPlayerController player, IWasdMenuOption option)
     {
@@ -2383,19 +2594,40 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         if (player == null || !IsValidPlayer(player) || !canVote)
             return HookResult.Continue;
 
-        if (@event.Text.Trim() == "rtv" || @event.Text.Trim() == "RTV")
+        var chatText = @event.Text.Trim();
+        if (IsChatCommand(chatText, "rtv"))
         {
             RtvCommand(player, null!);
+            return HookResult.Handled;
         }
-        else if (@event.Text.StartsWith("nominate") || @event.Text.StartsWith("yd"))
+        else if (IsChatCommand(chatText, "rtm") || IsChatCommand(chatText, "css_rtm"))
+        {
+            MapPoolCommand(player, null!);
+            return HookResult.Handled;
+        }
+        else if (chatText.StartsWith("nominate", StringComparison.OrdinalIgnoreCase) || chatText.StartsWith("yd", StringComparison.OrdinalIgnoreCase))
         {
             Nominate(player, @event.Text);
+            return HookResult.Handled;
         }
-        else if (@event.Text.StartsWith("nextmap"))
+        else if (chatText.StartsWith("nextmap", StringComparison.OrdinalIgnoreCase))
         {
             PrintNextMap(player, null!);
+            return HookResult.Handled;
         }
         return HookResult.Continue;
+    }
+
+    private static bool IsChatCommand(string text, string command)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+        var trimmed = text.Trim();
+        if (trimmed.StartsWith("!"))
+            trimmed = trimmed.Substring(1);
+        if (trimmed.StartsWith("/"))
+            trimmed = trimmed.Substring(1);
+        return trimmed.Equals(command, StringComparison.OrdinalIgnoreCase);
     }
 
     [ConsoleCommand("timeleft", "Get the time left")]
@@ -2764,6 +2996,8 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         menu.Add(Localizer["votefor.map"], AdminStartVotesMapHandle); // Start voting for map
         menu.Add(Localizer["vote.changeornot"], VotesForChangeMapHandle); // Start voting to change map or not
         menu.Add(Localizer["set.nextmap"], AdminSetNextMapHandle); // Choose and set next map
+        menu.Add(Localizer["pool.switch.menu"], AdminPoolSwitchHandle); // Switch map pool
+        menu.Add(Localizer["pool.vote.menu"], AdminPoolVoteHandle); // Start pool vote
         wASDMenu.manager.OpenMainMenu(caller, menu);
     }
 
@@ -2771,6 +3005,15 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     [CommandHelper(whoCanExecute: CommandUsage.SERVER_ONLY)]
     public void MapVoteCommand(CCSPlayerController? caller, CommandInfo command)
     {
+        if (IsPoolVoteInProgress)
+        {
+            Logger.LogInformation("MapVoteCommand: Pool vote in progress. Skip votes");
+            if (caller != null && IsValidPlayer(caller))
+                PrintToPlayerChat(caller, "poolvote.inprogress");
+            else
+                Console.WriteLine(Localizer["poolvote.inprogress"]);
+            return;
+        }
         if (IsVoteInProgress)
         {
             Logger.LogInformation("MapVoteCommand: Another vote active when ggmc_mapvote_start. Skip votes");
@@ -2803,6 +3046,15 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     [CommandHelper(whoCanExecute: CommandUsage.SERVER_ONLY)]
     public void MapVoteChangeCommand(CCSPlayerController? caller, CommandInfo command)
     {
+        if (IsPoolVoteInProgress)
+        {
+            Logger.LogInformation("MapVoteCommand: Pool vote in progress. Skip votes");
+            if (caller != null && IsValidPlayer(caller))
+                PrintToPlayerChat(caller, "poolvote.inprogress");
+            else
+                Console.WriteLine(Localizer["poolvote.inprogress"]);
+            return;
+        }
         if (IsVoteInProgress)
         {
             Logger.LogInformation("MapVoteCommand: Another vote active when ggmc_mapvote_with_change. Skip votes");
@@ -3144,6 +3396,77 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             }
         }
     }
+
+    [ConsoleCommand("css_rtm", "Vote for map pool")]
+    [CommandHelper(whoCanExecute: CommandUsage.CLIENT_ONLY)]
+    public void MapPoolCommand(CCSPlayerController caller, CommandInfo command)
+    {
+        if (!IsValidPlayer(caller))
+        {
+            Console.WriteLine("Invalid pool vote caller");
+            return;
+        }
+        UpdateLowPlayerMode(false);
+        if (!IsPoolVoteAllowed(out string reasonKey))
+        {
+            if (!string.IsNullOrEmpty(reasonKey))
+            {
+                PrintToPlayerChat(caller, reasonKey);
+            }
+            return;
+        }
+        if (_timerManager.IsTimerRunning("poolVoteTimer"))
+        {
+            int remainingTime = poolVoteCoolDownDuration - (int)(DateTime.Now - poolVoteCooldownStartTime).TotalSeconds;
+            if (remainingTime > 0)
+            {
+                PrintToPlayerChat(caller, "poolvote.time", remainingTime);
+                return;
+            }
+            else
+            {
+                KillPoolVoteTimer();
+                Logger.LogWarning("forced to kill poolVoteTimer.");
+            }
+        }
+        if (players[caller.Slot] == null)
+        {
+            PrintToPlayerChat(caller, "poolvote.now");
+            return;
+        }
+        if (players[caller.Slot].VotedPoolVote)
+        {
+            PrintToPlayerChat(caller, "poolvote.already", poolvote_need_more);
+            return;
+        }
+        if (!canPoolVote)
+        {
+            PrintToPlayerChat(caller, "poolvote.now");
+            return;
+        }
+
+        Logger.LogInformation($"{caller.PlayerName} voted pool");
+        players[caller.Slot].VotedPoolVote = true;
+        if (IsPoolVoteThreshold())
+        {
+            StartPoolVote();
+            return;
+        }
+        var playerEntities = Utilities.GetPlayers().Where(p => IsValidPlayer(p));
+        if (playerEntities != null && playerEntities.Any())
+        {
+            foreach (var playerController in playerEntities)
+            {
+                PrintToPlayerChat(playerController, "poolvote.entered", caller.PlayerName);
+                if (!players[playerController.Slot].SeenPoolVote)
+                {
+                    players[playerController.Slot].SeenPoolVote = true;
+                    PrintToPlayerChat(playerController, "poolvote.info");
+                }
+                PrintToPlayerChat(playerController, "poolvote.more.required", poolvote_need_more);
+            }
+        }
+    }
     private void Handle_Nominations(CCSPlayerController player, IWasdMenuOption option)
     {
         if (!IsValidPlayer(player) || option == null || option.OptionDisplay == null)
@@ -3336,6 +3659,8 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     {
         Logger.LogInformation($"ResetData from {Reason}");
         IsVoteInProgress = false;
+        IsPoolVoteInProgress = false;
+        _mapVoteQueued = false;
         nominatedMaps.Clear();
         mapsToVote.Clear();
         _selectedMap = null;
@@ -3343,7 +3668,12 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         MapToChange = "";
         _votedMap = 0;
         optionCounts = new Dictionary<string, int>(0);
+        poolOptionCounts = new Dictionary<string, int>(0);
+        poolVotePlayers.Clear();
+        PoolChatMenu = null;
+        PoolWASDMenu = null;
         rtvRestartProblems = 0;
+        poolVoteRestartProblems = 0;
         roundsManager.InitialiseMap();
         GlobalChatMenu = null;
         GlobalWASDMenu = null;
@@ -3352,6 +3682,27 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         TimeLimitExtends = 0;
         _extendMapCount = 0;
         timeLimitStartEventTime = DateTime.MinValue;
+        CleanPoolVoteArrays();
+    }
+    private void ClearPoolState()
+    {
+        nominatedMaps.Clear();
+        mapsToVote.Clear();
+        _selectedMap = null;
+        _roundEndMap = null;
+        MapToChange = "";
+        _votedMap = 0;
+        optionCounts = new Dictionary<string, int>(0);
+        poolOptionCounts = new Dictionary<string, int>(0);
+        poolVotePlayers.Clear();
+        foreach (var player in players)
+        {
+            if (player != null)
+            {
+                player.ProposedMaps = "";
+                player.selectedMaps.Clear();
+            }
+        }
     }
     private static bool IsValidPlayer(CCSPlayerController? p)
     {
@@ -3403,6 +3754,22 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         rtvCoolDownDuration = 0;
         Logger.LogInformation("rtv cooldown off, rtv is allowed");
     }
+    private void MakePoolVoteTimer(int interval)
+    {
+        if (interval > 0)
+        {
+            _timerManager.StartTimer("poolVoteTimer", interval, Handle_PoolVoteTimer, TimerFlags.STOP_ON_MAPCHANGE);
+            canPoolVote = false;
+            poolVoteCoolDownDuration = interval;
+            poolVoteCooldownStartTime = DateTime.Now;
+        }
+    }
+    private void Handle_PoolVoteTimer()
+    {
+        canPoolVote = true;
+        poolVoteCoolDownDuration = 0;
+        Logger.LogInformation("pool vote cooldown off, pool vote is allowed");
+    }
     private bool IsRTVThreshold(bool log = true)
     {
         int total = 0;
@@ -3450,11 +3817,60 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         }
         return false;
     }
+    private bool IsPoolVoteThreshold(bool log = true)
+    {
+        int total = 0;
+        int votes = 0;
+        var playerEntities = Utilities.GetPlayers().Where(p => IsValidPlayer(p));
+        if (playerEntities != null && playerEntities.Any())
+        {
+            foreach (var player in playerEntities)
+            {
+                if (players[player.Slot] != null)
+                {
+                    if (players[player.Slot].VotedPoolVote)
+                    {
+                        votes++;
+                        total++;
+                    }
+                    else
+                    {
+                        if (player.Team == CsTeam.CounterTerrorist
+                            || player.Team == CsTeam.Terrorist)
+                        {
+                            total++;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (total > 0)
+        {
+            double needed = Config.PoolVoteSettings.VotesToWin > 0
+                ? Config.PoolVoteSettings.VotesToWin
+                : Config.VoteSettings.VotesToWin;
+            double percent_now = (double)votes / total;
+            poolvote_need_more = (int)Math.Ceiling((needed - percent_now) * total);
+
+            if ((total == 1 && votes == 1) || poolvote_need_more <= 0)
+            {
+                Logger.LogInformation($"Successful pool vote %: {percent_now}, {votes} out of {total}");
+                return true;
+            }
+            else
+            {
+                if (log)
+                    Logger.LogInformation($"Not enough for pool vote: % - {percent_now}, {votes} out of {total}, {poolvote_need_more} need more");
+            }
+        }
+        return false;
+    }
     private void StartRTV()
     {
         if (canRtv)
         {
-            if (IsVoteInProgress)
+            if (IsVoteInProgress || IsPoolVoteInProgress)
             {
                 if (++rtvRestartProblems < 6)
                 {
@@ -3478,6 +3894,37 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             Logger.LogInformation("Can't start RTV vote now");
         }
     }
+    private void StartPoolVote()
+    {
+        if (!canPoolVote)
+        {
+            Logger.LogInformation("Can't start pool vote now");
+            return;
+        }
+        if (IsVoteInProgress || IsPoolVoteInProgress)
+        {
+            if (++poolVoteRestartProblems < 6)
+            {
+                AddTimer(10.0f, StartPoolVote, TimerFlags.STOP_ON_MAPCHANGE);
+                Logger.LogInformation("Starting pool vote: another vote in progress, waiting for 10 seconds more.");
+            }
+            else
+            {
+                Logger.LogError("Starting pool vote: another vote in progress, waited a minute and stop pool vote.");
+            }
+            return;
+        }
+        if (!IsPoolVoteAllowed(out _))
+        {
+            Logger.LogInformation("Pool vote is not allowed now");
+            return;
+        }
+        IsPoolVoteInProgress = true;
+        CleanPoolVoteArrays();
+        Logger.LogInformation("Starting pool vote");
+        MakePoolVoteTimer(Config.PoolVoteSettings.IntervalBetweenVotes);
+        StartPoolVoteMenu();
+    }
     private void CleanRTVArrays()
     {
         foreach (var player in players)
@@ -3489,6 +3936,267 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                 player.SeenRtv = false;
             }
         }
+    }
+    private void CleanPoolVoteArrays()
+    {
+        foreach (var player in players)
+        {
+            if (player != null)
+            {
+                player.VotedPoolVote = false;
+                player.SeenPoolVote = false;
+            }
+        }
+    }
+    private void KillPoolVoteTimer()
+    {
+        _timerManager.StopTimer("poolVoteTimer");
+        canPoolVote = true;
+        poolVoteCoolDownDuration = 0;
+        CleanPoolVoteArrays();
+    }
+    private bool IsPoolVoteAllowed(out string reasonKey)
+    {
+        reasonKey = "";
+        if (_poolVoteConfigInvalid)
+        {
+            reasonKey = "poolvote.config.invalid";
+            return false;
+        }
+        if (!Config.PoolVoteSettings.Enable)
+        {
+            reasonKey = "poolvote.disabled";
+            return false;
+        }
+        if (!canVote)
+        {
+            reasonKey = "poolvote.now";
+            return false;
+        }
+        if (MapPools.Count < 2)
+        {
+            reasonKey = "poolvote.notenoughpools";
+            return false;
+        }
+        if (IsVoteInProgress || IsPoolVoteInProgress)
+        {
+            reasonKey = "poolvote.now";
+            return false;
+        }
+        if (IsPoolVoteBlockedByUpcomingMapVote())
+        {
+            reasonKey = "poolvote.too.late";
+            return false;
+        }
+        if (!string.IsNullOrEmpty(_roundEndMap) || _runVoteRoundEnd || _timeLimitVoteRoundStart || _timeLimitVoteRoundEnd)
+        {
+            reasonKey = "poolvote.too.late";
+            return false;
+        }
+        return true;
+    }
+
+    private bool IsPoolVoteBlockedByUpcomingMapVote()
+    {
+        if (Config.TimeLimitSettings.VoteDependsOnTimeLimit)
+        {
+            int blockSeconds = Config.PoolVoteSettings.BlockBeforeMapVoteSeconds;
+            if (blockSeconds > 0)
+            {
+                if (_timeLimitTimerStarted)
+                {
+                    var elapsed = (DateTime.UtcNow - _timeLimitStartTime).TotalSeconds;
+                    var remaining = _timeLimitDuration - elapsed;
+                    if (remaining <= blockSeconds)
+                        return true;
+                }
+                if (_timeLimitVoteRoundStart || _timeLimitVoteRoundEnd)
+                    return true;
+            }
+        }
+        else if (Config.WinDrawSettings.VoteDependsOnRoundWins)
+        {
+            int blockRounds = Config.PoolVoteSettings.BlockBeforeMapVoteRounds;
+            if (blockRounds > 0 && !roundsManager.UnlimitedRounds)
+            {
+                int threshold = Config.WinDrawSettings.TriggerRoundsBeforeEnd + (blockRounds - 1);
+                if (roundsManager.RemainingRounds <= threshold)
+                    return true;
+                if (roundsManager.CanClinch && roundsManager.RemainingWins <= threshold)
+                    return true;
+            }
+        }
+        return false;
+    }
+    private void StartPoolVoteMenu()
+    {
+        poolOptionCounts.Clear();
+        poolVotePlayers.Clear();
+        var menuMode = GetPoolVoteMenuMode();
+        bool useWasd = menuMode != MenuMode.Chat;
+        bool useChat = menuMode != MenuMode.Wasd;
+
+        if (useChat)
+        {
+            PoolChatMenu = new ChatMenu(_localizer["poolvote.title"]);
+            if (PoolChatMenu == null)
+            {
+                Logger.LogError("PoolChatMenu is null but should not be.");
+                IsPoolVoteInProgress = false;
+                return;
+            }
+        }
+        if (useWasd)
+        {
+            PoolWASDMenu = wASDMenu.manager.CreateMenu(_localizer["poolvote.title"], Config.MenuSettings.FreezePlayerInMenu, true);
+            if (PoolWASDMenu == null)
+            {
+                Logger.LogError("PoolWASDMenu is null but should not be.");
+                IsPoolVoteInProgress = false;
+                return;
+            }
+        }
+
+        foreach (var pool in MapPools.Keys)
+        {
+            string poolName = pool;
+            if (useWasd)
+            {
+                PoolWASDMenu?.Add(poolName, (player, option) =>
+                {
+                    if (!poolVotePlayers.ContainsKey(player.Slot) && option != null && option.OptionDisplay != null)
+                    {
+                        option.Count++;
+                        wASDMenu.UpdatePlayersCenterHtml();
+                        poolVotePlayers.Add(player.Slot, poolName);
+                        if (!poolOptionCounts.TryGetValue(poolName, out int count))
+                            poolOptionCounts[poolName] = 1;
+                        else
+                            poolOptionCounts[poolName] = count + 1;
+                        if (Config.OtherSettings.PrintPlayersChoiceInChat)
+                        {
+                            PrintToServerChat("poolvote.choice", player.PlayerName, poolName);
+                        }
+                        else
+                        {
+                            PrintToPlayerChat(player, "poolvote.choice", player.PlayerName, poolName);
+                        }
+                    }
+                    wASDMenu.manager.CloseMenu(player);
+                    if (useChat)
+                        MenuManager.CloseActiveMenu(player);
+                }, poolName);
+            }
+            if (useChat)
+            {
+                PoolChatMenu?.AddMenuOption(poolName, (player, option) =>
+                {
+                    if (!poolVotePlayers.ContainsKey(player.Slot) && option != null && option.Text != null)
+                    {
+                        poolVotePlayers.Add(player.Slot, poolName);
+                        if (!poolOptionCounts.TryGetValue(poolName, out int count))
+                            poolOptionCounts[poolName] = 1;
+                        else
+                            poolOptionCounts[poolName] = count + 1;
+                        if (Config.OtherSettings.PrintPlayersChoiceInChat)
+                        {
+                            PrintToServerChat("poolvote.choice", player.PlayerName, poolName);
+                        }
+                        else
+                        {
+                            PrintToPlayerChat(player, "poolvote.choice", player.PlayerName, poolName);
+                        }
+                    }
+                    MenuManager.CloseActiveMenu(player);
+                    if (useWasd)
+                        wASDMenu.manager.CloseMenu(player);
+                });
+            }
+        }
+
+        if (useChat && PoolChatMenu != null)
+        {
+            PoolChatMenu.PostSelectAction = PostSelectAction.Close;
+        }
+
+        var playerEntities = Utilities.GetPlayers().Where(p => IsValidPlayer(p));
+        if (playerEntities != null && playerEntities.Any())
+        {
+            foreach (var player in playerEntities)
+            {
+                if (!Config.VoteSettings.SpectatorsCanVote && player.Team == CsTeam.Spectator)
+                    continue;
+                if (useChat && PoolChatMenu != null)
+                    MenuManager.OpenChatMenu(player, PoolChatMenu);
+                if (useWasd && PoolWASDMenu != null)
+                    wASDMenu.manager.OpenMainMenu(player, PoolWASDMenu);
+            }
+        }
+        PrintToServerChat("poolvote.started");
+        poolVoteTimer = AddTimer((float)Config.PoolVoteSettings.VotingTime, TimerPoolVote, TimerFlags.STOP_ON_MAPCHANGE);
+    }
+    private void TimerPoolVote()
+    {
+        if (PoolWASDMenu != null)
+        {
+            var playerEntities = Utilities.GetPlayers().Where(p => IsValidPlayer(p));
+            if (playerEntities != null && playerEntities.Any())
+            {
+                foreach (var player in playerEntities)
+                {
+                    wASDMenu.manager.CloseActiveMenu(PoolWASDMenu);
+                }
+            }
+        }
+        PoolChatMenu = null;
+        PoolWASDMenu = null;
+        poolVoteTimer = null;
+        IsPoolVoteInProgress = false;
+
+        if (poolOptionCounts.Count == 0)
+        {
+            PrintToServerChat("poolvote.keep");
+            TryStartQueuedMapVote();
+            return;
+        }
+
+        int maxVotes = poolOptionCounts.Values.Max();
+        var winningPools = poolOptionCounts.Where(kv => kv.Value == maxVotes).Select(kv => kv.Key).ToList();
+        if (winningPools.Count != 1)
+        {
+            PrintToServerChat("poolvote.keep");
+            TryStartQueuedMapVote();
+            return;
+        }
+
+        string selectedPool = winningPools[0];
+        if (string.Equals(selectedPool, ActivePoolName, StringComparison.OrdinalIgnoreCase))
+        {
+            PrintToServerChat("poolvote.keep");
+            TryStartQueuedMapVote();
+            return;
+        }
+
+        if (SetActivePool(selectedPool, true, true))
+        {
+            TryStartQueuedMapVote();
+            return;
+        }
+        else
+        {
+            PrintToServerChat("poolvote.keep");
+            TryStartQueuedMapVote();
+        }
+    }
+    private void TryStartQueuedMapVote()
+    {
+        if (!_mapVoteQueued)
+            return;
+        if (IsPoolVoteInProgress || IsVoteInProgress)
+            return;
+        _mapVoteQueued = false;
+        Logger.LogInformation("Starting queued map vote after pool vote.");
+        StartVote();
     }
     private void PrintToPlayerCenter(CCSPlayerController player, string message, params object[] arguments)
     {
@@ -4029,6 +4737,9 @@ public class MCConfig : BasePluginConfig
     [JsonPropertyName("TimeLimitSettings")]
     public TimeLimitSettings TimeLimitSettings { get; set; } = new TimeLimitSettings();
 
+    [JsonPropertyName("PoolVoteSettings")]
+    public PoolVoteSettings PoolVoteSettings { get; set; } = new PoolVoteSettings();
+
     [JsonPropertyName("DiscordSettings")]
     public DiscordSettings DiscordSettings { get; set; } = new DiscordSettings();
 
@@ -4118,6 +4829,43 @@ public class RTVSettings
     /* Prevent RTV after some number of rounds played to allow leaders to finish the game. */
     [JsonPropertyName("NoRTVafterRoundsPlayed")]
     public int NoRTVafterRoundsPlayed { get; set; } = 0;
+}
+public class PoolVoteSettings
+{
+    [JsonPropertyName("Enable")]
+    public bool Enable { get; set; } = false;
+
+    /* Default pool name. If empty or not found, the first pool is used. */
+    [JsonPropertyName("DefaultPool")]
+    public string DefaultPool { get; set; } = "";
+
+    /* Time (in seconds) before first pool vote can be held. */
+    [JsonPropertyName("DelayFromStart")]
+    public int DelayFromStart { get; set; } = 90;
+
+    /* Time (in seconds) after a failed pool vote before another can be held. */
+    [JsonPropertyName("IntervalBetweenVotes")]
+    public int IntervalBetweenVotes { get; set; } = 120;
+
+    /* Percent of players to start a pool vote. If 0, VoteSettings.VotesToWin is used. */
+    [JsonPropertyName("VotesToWin")]
+    public double VotesToWin { get; set; } = 0.0;
+
+    /* Time in seconds to vote for a pool. */
+    [JsonPropertyName("VotingTime")]
+    public int VotingTime { get; set; } = 20;
+
+    /* Block pool vote X seconds before map vote starts (TimeLimit mode only). */
+    [JsonPropertyName("BlockBeforeMapVoteSeconds")]
+    public int BlockBeforeMapVoteSeconds { get; set; } = 30;
+
+    /* Block pool vote X rounds before map vote starts (RoundWins mode only). */
+    [JsonPropertyName("BlockBeforeMapVoteRounds")]
+    public int BlockBeforeMapVoteRounds { get; set; } = 1;
+
+    /* Pool vote menu mode: "wasd", "chat", or "both" */
+    [JsonPropertyName("MenuMode")]
+    public string MenuMode { get; set; } = "";
 }
 public class WinDrawSettings
 {
@@ -4289,6 +5037,8 @@ public class Player
         ProposedMaps = "";
         VotedRtv = false;
         SeenRtv = false;
+        VotedPoolVote = false;
+        SeenPoolVote = false;
         selectedMaps = [];
         putInServer = false;
     }
@@ -4296,6 +5046,8 @@ public class Player
     public string ProposedMaps { get; set; } = "";
     public bool VotedRtv { get; set; } = false;
     public bool SeenRtv { get; set; } = false;
+    public bool VotedPoolVote { get; set; } = false;
+    public bool SeenPoolVote { get; set; } = false;
     public List<string> selectedMaps { get; set; } = [];
     public bool HasProposedMaps()
     {
