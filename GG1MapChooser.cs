@@ -552,6 +552,10 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                     MakeRTVTimer(Config.RTVSettings.RTVDelayFromStart);
                     //                    });
                 }
+                else if (Config.RTVSettings.AllowRTV && Config.RTVSettings.RTVDelayFromStart <= 0)
+                {
+                    canRtv = true;
+                }
                 if (Config.PoolVoteSettings.Enable && !_poolVoteConfigInvalid && Config.PoolVoteSettings.DelayFromStart > 0)
                 {
                     MakePoolVoteTimer(Config.PoolVoteSettings.DelayFromStart);
@@ -777,21 +781,26 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
 
         if (canVote)
         {
-            if (Config.TimeLimitSettings.ChangeMapAfterTimeLimit)
-            {
-                _timeLimitMapChangeTimer = AddTimer((float)(Config.TimeLimitSettings.TriggerSecondsBeforeEnd - 6), TimeLimitChangeMapTimer, TimerFlags.STOP_ON_MAPCHANGE); // 5 seconds to the map change process plus 1 sec extra
-                Logger.LogInformation($"Start MapChange timer in {Config.TimeLimitSettings.TriggerSecondsBeforeEnd - 6} sec.");
-            }
             if (!roundsManager.MaxRoundsVoted)
             {
                 Logger.LogInformation("Time to vote because of TimeLimitTimerHandle");
                 if (Config.TimeLimitSettings.VoteNextRoundStartAfterTrigger && TimeLimitExtends < 2) // if TimeLimit Extends 2 times - just start vote
                 {
+                    if (Config.TimeLimitSettings.ChangeMapAfterTimeLimit)
+                    {
+                        // Do not start a map-change timer before we extend to round start/end.
+                        TimeLimitChangeMapTimerClear();
+                    }
                     _timeLimitVoteRoundStart = true;
                     ExtendTimeLimit(); // Extend time limit to wait the round start or end, but not more than 2 times
                 }
                 else if (Config.TimeLimitSettings.VoteRoundEndAfterTrigger && TimeLimitExtends < 2)
                 {
+                    if (Config.TimeLimitSettings.ChangeMapAfterTimeLimit)
+                    {
+                        // Do not start a map-change timer before we extend to round start/end.
+                        TimeLimitChangeMapTimerClear();
+                    }
                     _timeLimitVoteRoundEnd = true;
                     ExtendTimeLimit();
                 }
