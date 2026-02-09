@@ -1124,7 +1124,35 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         }
         else
         {
-            Logger.LogInformation("Vote Timer already works, we don't start new Vote at StartVote");
+            // If a timer exists but IsVoteInProgress is false, the timer is likely stale.
+            // Clear it and proceed to start a fresh vote to avoid blocking Admin/TimeLimit triggers.
+            if (!IsVoteInProgress)
+            {
+                Logger.LogWarning("StartVote: Found stale voteTimer (IsVoteInProgress=false). Clearing and restarting vote.");
+                try
+                {
+                    SimpleKillTimer(voteTimer);
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "StartVote: Error while killing stale voteTimer");
+                }
+                voteTimer = null;
+
+                // Start the vote now after clearing stale timer
+                _mapVoteQueued = false;
+                IsVoteInProgress = true;
+                roundsManager.MaxRoundsVoted = true;
+                timeToVote = Config.VoteSettings.VotingTime;
+                VotesCounter = 0;
+                voteTimer = AddTimer(1.0f, EndOfVotes, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE);
+                Logger.LogInformation("Vote Timer started at StartVote after clearing stale timer");
+                DoAutoMapVote(null!, timeToVote, SSMC_ChangeMapTime.ChangeMapTime_MapEnd, GetVoteMenuMode());
+            }
+            else
+            {
+                Logger.LogInformation("Vote Timer already works, we don't start new Vote at StartVote");
+            }
         }
     }
     // Автоматическая смена карты на рандомную подходящую
@@ -2140,18 +2168,33 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                 Logger.LogInformation("DoAutoMapVote: Can't do Auto Map Vote - not canVote.");
             });
             IsVoteInProgress = false;
+            if (voteTimer != null)
+            {
+                try { SimpleKillTimer(voteTimer); } catch (Exception ex) { Logger.LogError(ex, "DoAutoMapVote: Error killing voteTimer"); }
+                voteTimer = null;
+            }
             return;
         }
         if (GlobalWASDMenu != null)
         {
             Logger.LogError($"GlobalWASDMenu is not null but should be, possibly another vote is active");
             IsVoteInProgress = false;
+            if (voteTimer != null)
+            {
+                try { SimpleKillTimer(voteTimer); } catch (Exception ex) { Logger.LogError(ex, "DoAutoMapVote: Error killing voteTimer"); }
+                voteTimer = null;
+            }
             return;
         }
         if (GlobalChatMenu != null)
         {
             Logger.LogError($"GlobalChatMenu is not null but should be, possibly another vote is active");
             IsVoteInProgress = false;
+            if (voteTimer != null)
+            {
+                try { SimpleKillTimer(voteTimer); } catch (Exception ex) { Logger.LogError(ex, "DoAutoMapVote: Error killing voteTimer"); }
+                voteTimer = null;
+            }
             return;
         }
         int ConfigMapsInVote = 0;
@@ -2178,6 +2221,11 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             {
                 Logger.LogError($"GlobalChatMenu is null but should not be, something is wrong");
                 IsVoteInProgress = false;
+                if (voteTimer != null)
+                {
+                    try { SimpleKillTimer(voteTimer); } catch (Exception ex) { Logger.LogError(ex, "DoAutoMapVote: Error killing voteTimer"); }
+                    voteTimer = null;
+                }
                 return;
             }
         }
@@ -2192,6 +2240,11 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             {
                 Logger.LogError($"GlobalWASDMenu is null but should not be, something is wrong");
                 IsVoteInProgress = false;
+                if (voteTimer != null)
+                {
+                    try { SimpleKillTimer(voteTimer); } catch (Exception ex) { Logger.LogError(ex, "DoAutoMapVote: Error killing voteTimer"); }
+                    voteTimer = null;
+                }
                 return;
             }
         }
@@ -2260,6 +2313,11 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                 {
                     Logger.LogInformation("DoAutoMapVote: Could not run automatic vote, no nominated and valid maps available.");
                     IsVoteInProgress = false;
+                    if (voteTimer != null)
+                    {
+                        try { SimpleKillTimer(voteTimer); } catch (Exception ex) { Logger.LogError(ex, "DoAutoMapVote: Error killing voteTimer"); }
+                        voteTimer = null;
+                    }
                     return;
                 }
 
@@ -2344,6 +2402,11 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             Console.WriteLine("DoAutoMapVote: no maps for the vote. Exit with error.");
             Logger.LogError("DoAutoMapVote: no maps for the vote. Exit with error.");
             IsVoteInProgress = false;
+            if (voteTimer != null)
+            {
+                try { SimpleKillTimer(voteTimer); } catch (Exception ex) { Logger.LogError(ex, "DoAutoMapVote: Error killing voteTimer"); }
+                voteTimer = null;
+            }
             return;
         }
         if (Config.VoteSettings.IncludeNoVote)
