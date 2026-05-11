@@ -37,7 +37,7 @@ namespace MapChooser;
 public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
 {
     public override string ModuleName => "GG1_MapChooser";
-    public override string ModuleVersion => "v1.7.2";
+    public override string ModuleVersion => "v1.7.3";
     public override string ModuleAuthor => "Sergey";
     public override string ModuleDescription => "Map chooser, voting, rtv, nominate, etc.";
     public MCCoreAPI MCCoreAPI { get; set; } = null!;
@@ -56,6 +56,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         _timerManager = new(this);
         webhookService = new(this);
         wASDMenu = new(this);
+        wasdMenuManager = new(this);
     }
     public MCConfig Config { get; set; } = new();
     public void OnConfigParsed(MCConfig config)
@@ -118,6 +119,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     public ChatMenu? GlobalChatMenu { get; set; } = null;
     public IWasdMenu? GlobalWASDMenu { get; set; } = null;
     public WASDMenu wASDMenu { get; set; }
+//    public WasdMenuMM WASDMenuMM { get; set; }
     private Dictionary<string, int> optionCounts = new Dictionary<string, int>();
     private Timer? voteTimer = null;
     //    public string EmergencyMap { get; set; } = "";
@@ -133,6 +135,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     private readonly object _timerLock = new object();
     public CCSGameRules? gameRules;
     private bool _matchStarted = false;
+    public WasdManager wasdMenuManager;
     public override void Load(bool hotReload)
     {
         Logger.LogInformation($"{ModuleVersion}");
@@ -146,7 +149,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         {
             Logger.LogWarning("GGMC API not registered");
         }
-        var wasdMenuManager = new WasdManager();
+//        wasdMenuManager = new WasdManager(this);
         if (wasdMenuManager != null)
         {
             Capabilities.RegisterPluginCapability(WasdMenuManagerCapability, () => wasdMenuManager);
@@ -154,7 +157,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         }
         else
         {
-            Logger.LogWarning("GGMC WASD API not registered");
+            Logger.LogWarning("wasdMenuManager null and GGMC WASD API not registered");
         }
 
         WebhookNextMapMessagePath = Server.GameDirectory + "/csgo/addons/counterstrikesharp/configs/plugins/GG1MapChooser/NextMapMessage.json";
@@ -651,7 +654,10 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                     voteEndTimer = AddTimer(1.0f, Handle_VoteEndTimer, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE);
                 }
                 else
+                {
                     Logger.LogError("Can't change map after Win/Draw because _roundEndMap is null");
+                    GGMCDoAutoMapChange(SSMC_ChangeMapTime.ChangeMapTime_Now);
+                }
             }
         }
         return HookResult.Continue;
@@ -1406,133 +1412,234 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             IsVoteInProgress = true;
             optionCounts.Clear();
             votePlayers.Clear();
-
-            if (Config.VoteSettings.EndMapVoteWASDMenu)
+            if (Config.VoteSettings.YesNoVotePanorama)
             {
-                GlobalWASDMenu = wASDMenu.manager.CreateMenu(_localizer["vote.changeornot"], Config.MenuSettings.FreezePlayerInMenu, true);
-                if (GlobalWASDMenu == null)
-                {
-                    Logger.LogError($"GlobalWASDMenu is null but should not be, something is wrong");
-                    IsVoteInProgress = false;
-                    return;
-                }
-                GlobalWASDMenu.Add(_localizer["vote.yes"], (player, option) =>
-                {
-                    if (!votePlayers.ContainsKey(player.Slot))
-                    {
-                        option.Count++;
-                        wASDMenu.UpdatePlayersCenterHtml();
-                        votePlayers.Add(player.Slot, "Yes");
-                        if (!optionCounts.TryGetValue("Yes", out int count))
-                            optionCounts["Yes"] = 1;
-                        else
-                            optionCounts["Yes"] = count + 1;
-                        if (Config.OtherSettings.PrintPlayersChoiceInChat)
-                        {
-                            PrintToServerChat("player.voteforchange", player.PlayerName);
-                        }
-                        else
-                        {
-                            PrintToPlayerChat(player, "player.voteforchange", player.PlayerName);
-                        }
-                    }
-                    wASDMenu.manager.CloseMenu(player);
-                }, "Yes");
-                GlobalWASDMenu.Add(_localizer["vote.no"], (player, option) =>
-                {
-                    if (!votePlayers.ContainsKey(player.Slot))
-                    {
-                        option.Count++;
-                        wASDMenu.UpdatePlayersCenterHtml();
-                        votePlayers.Add(player.Slot, "No");
-                        if (!optionCounts.TryGetValue("No", out int count))
-                            optionCounts["No"] = 1;
-                        else
-                            optionCounts["No"] = count + 1;
-                        if (Config.OtherSettings.PrintPlayersChoiceInChat)
-                        {
-                            PrintToServerChat("player.voteagainstchange", player.PlayerName);
-                        }
-                        else
-                        {
-                            PrintToPlayerChat(player, "player.voteagainstchange", player.PlayerName);
-                        }
-                    }
-                    wASDMenu.manager.CloseMenu(player);
-                }, "No");
+                var voteMenu = new PanoramaVote(this);
+                //"vote.changeornot", HandlerPanoramaVoteForChangeMap, this, Config.OtherSettings.PrintPlayersChoiceInChat);
+                voteMenu.StartVote(Config.VoteSettings.VotingTime, Config.VoteSettings.PanoramaSFUIString, "vote.changeornot.panorama", HandlerPanoramaVotesChangeOrNot, HandlerPanoramaVoteResult);
             }
             else
             {
-                GlobalChatMenu = new ChatMenu(_localizer["vote.changeornot"]);
-                if (GlobalChatMenu == null)
+                if (Config.VoteSettings.EndMapVoteWASDMenu)
                 {
-                    Logger.LogError($"GlobalChatMenu is null but should not be, something is wrong");
-                    IsVoteInProgress = false;
+                    GlobalWASDMenu = wASDMenu.manager.CreateMenu(_localizer["vote.changeornot"], Config.MenuSettings.FreezePlayerInMenu, true);
+                    if (GlobalWASDMenu == null)
+                    {
+                        Logger.LogError($"GlobalWASDMenu is null but should not be, something is wrong");
+                        IsVoteInProgress = false;
+                        return;
+                    }
+                    GlobalWASDMenu.Add(_localizer["vote.yes"], (player, option) =>
+                    {
+                        if (!votePlayers.ContainsKey(player.Slot))
+                        {
+                            option.Count++;
+                            wASDMenu.UpdatePlayersCenterHtml();
+                            votePlayers.Add(player.Slot, "Yes");
+                            if (!optionCounts.TryGetValue("Yes", out int count))
+                                optionCounts["Yes"] = 1;
+                            else
+                                optionCounts["Yes"] = count + 1;
+                            if (Config.OtherSettings.PrintPlayersChoiceInChat)
+                            {
+                                PrintToServerChat("player.voteforchange", player.PlayerName);
+                            }
+                            else
+                            {
+                                PrintToPlayerChat(player, "player.voteforchange", player.PlayerName);
+                            }
+                        }
+                        wASDMenu.manager.CloseMenu(player);
+                    }, "Yes");
+                    GlobalWASDMenu.Add(_localizer["vote.no"], (player, option) =>
+                    {
+                        if (!votePlayers.ContainsKey(player.Slot))
+                        {
+                            option.Count++;
+                            wASDMenu.UpdatePlayersCenterHtml();
+                            votePlayers.Add(player.Slot, "No");
+                            if (!optionCounts.TryGetValue("No", out int count))
+                                optionCounts["No"] = 1;
+                            else
+                                optionCounts["No"] = count + 1;
+                            if (Config.OtherSettings.PrintPlayersChoiceInChat)
+                            {
+                                PrintToServerChat("player.voteagainstchange", player.PlayerName);
+                            }
+                            else
+                            {
+                                PrintToPlayerChat(player, "player.voteagainstchange", player.PlayerName);
+                            }
+                        }
+                        wASDMenu.manager.CloseMenu(player);
+                    }, "No");
+                }
+                else
+                {
+                    GlobalChatMenu = new ChatMenu(_localizer["vote.changeornot"]);
+                    if (GlobalChatMenu == null)
+                    {
+                        Logger.LogError($"GlobalChatMenu is null but should not be, something is wrong");
+                        IsVoteInProgress = false;
+                        return;
+                    }
+                    GlobalChatMenu.AddMenuOption(_localizer["vote.yes"], (player, option) =>
+                    {
+                        if (!votePlayers.ContainsKey(player.Slot))
+                        {
+                            votePlayers.Add(player.Slot, "Yes");
+                            if (!optionCounts.TryGetValue("Yes", out int count))
+                                optionCounts["Yes"] = 1;
+                            else
+                                optionCounts["Yes"] = count + 1;
+                            if (Config.OtherSettings.PrintPlayersChoiceInChat)
+                            {
+                                PrintToServerChat("player.voteforchange", player.PlayerName);
+                            }
+                            else
+                            {
+                                PrintToPlayerChat(player, "player.voteforchange", player.PlayerName);
+                            }
+                        }
+                        MenuManager.CloseActiveMenu(player);
+                    });
+                    GlobalChatMenu.AddMenuOption(_localizer["vote.no"], (player, option) =>
+                    {
+                        if (!votePlayers.ContainsKey(player.Slot))
+                        {
+                            votePlayers.Add(player.Slot, "No");
+                            if (!optionCounts.TryGetValue("No", out int count))
+                                optionCounts["No"] = 1;
+                            else
+                                optionCounts["No"] = count + 1;
+                            if (Config.OtherSettings.PrintPlayersChoiceInChat)
+                            {
+                                PrintToServerChat("player.voteagainstchange", player.PlayerName);
+                            }
+                            else
+                            {
+                                PrintToPlayerChat(player, "player.voteagainstchange", player.PlayerName);
+                            }
+                        }
+                        MenuManager.CloseActiveMenu(player);
+                    });
+                }
+                //            ChangeOrNotMenu.PostSelectAction = PostSelectAction.Close;
+
+                var playerEntities = Utilities.GetPlayers().Where(p => IsValidPlayer(p));
+                if (playerEntities != null && playerEntities.Any())
+                {
+                    foreach (var player in playerEntities)
+                    {
+                        if (!Config.VoteSettings.SpectatorsCanVote && player.Team == CsTeam.Spectator)
+                            continue;
+                        if (Config.VoteSettings.EndMapVoteWASDMenu)
+                        {
+                            wASDMenu.manager.OpenMainMenu(player, GlobalWASDMenu);
+                        }
+                        else if (GlobalChatMenu != null)
+                        {
+                            MenuManager.OpenChatMenu(player, GlobalChatMenu);
+                        }
+                    }
+                    AddTimer((float)Config.VoteSettings.VotingTime, () => TimerChangeOrNot(), TimerFlags.STOP_ON_MAPCHANGE);
+                }
+                else
+                {
+                    Logger.LogError("VotesForChangeMapHandle: No valid players found to open menu for.");
                     return;
                 }
-                GlobalChatMenu.AddMenuOption(_localizer["vote.yes"], (player, option) =>
-                {
-                    if (!votePlayers.ContainsKey(player.Slot))
-                    {
-                        votePlayers.Add(player.Slot, "Yes");
-                        if (!optionCounts.TryGetValue("Yes", out int count))
-                            optionCounts["Yes"] = 1;
-                        else
-                            optionCounts["Yes"] = count + 1;
-                        if (Config.OtherSettings.PrintPlayersChoiceInChat)
-                        {
-                            PrintToServerChat("player.voteforchange", player.PlayerName);
-                        }
-                        else
-                        {
-                            PrintToPlayerChat(player, "player.voteforchange", player.PlayerName);
-                        }
-                    }
-                    MenuManager.CloseActiveMenu(player);
-                });
-                GlobalChatMenu.AddMenuOption(_localizer["vote.no"], (player, option) =>
-                {
-                    if (!votePlayers.ContainsKey(player.Slot))
-                    {
-                        votePlayers.Add(player.Slot, "No");
-                        if (!optionCounts.TryGetValue("No", out int count))
-                            optionCounts["No"] = 1;
-                        else
-                            optionCounts["No"] = count + 1;
-                        if (Config.OtherSettings.PrintPlayersChoiceInChat)
-                        {
-                            PrintToServerChat("player.voteagainstchange", player.PlayerName);
-                        }
-                        else
-                        {
-                            PrintToPlayerChat(player, "player.voteagainstchange", player.PlayerName);
-                        }
-                    }
-                    MenuManager.CloseActiveMenu(player);
-                });
-            }
-            //            ChangeOrNotMenu.PostSelectAction = PostSelectAction.Close;
-
-            var playerEntities = Utilities.GetPlayers().Where(p => IsValidPlayer(p));
-            if (playerEntities != null && playerEntities.Any())
-            {
-                foreach (var player in playerEntities)
-                {
-                    if (!Config.VoteSettings.SpectatorsCanVote && player.Team == CsTeam.Spectator)
-                        continue;
-                    if (Config.VoteSettings.EndMapVoteWASDMenu)
-                    {
-                        wASDMenu.manager.OpenMainMenu(player, GlobalWASDMenu);
-                    }
-                    else if (GlobalChatMenu != null)
-                    {
-                        MenuManager.OpenChatMenu(player, GlobalChatMenu);
-                    }
-                }
-
-                AddTimer((float)Config.VoteSettings.VotingTime, () => TimerChangeOrNot(), TimerFlags.STOP_ON_MAPCHANGE);
             }
         }
+    }
+    private void HandlerPanoramaVotesChangeOrNot(PanoramaVoteAction action, int param1, int param2)
+    {
+        switch (action)
+        {
+            case PanoramaVoteAction.VoteAction_Start: // On Vote Start
+            {
+                Logger.LogInformation("PanoramaVote: Change map or not Vote started!");
+                //****************************************************************
+                Server.PrintToChatAll($" {ChatColors.Green}Vote started!");
+                break;
+            }
+            case PanoramaVoteAction.VoteAction_Vote: // On Player Vote: param1 = client slot, param2 = choice (VOTE_OPTION1=yes, VOTE_OPTION2=no)
+            {
+                CCSPlayerController player = Utilities.GetPlayerFromSlot(param1)!;
+                if (player == null || !player.IsValid || player.Connected != PlayerConnectedState.Connected)
+                {
+                    break;
+                }
+
+                string choice;
+                string chatMessage;
+                if (param2 == (int)VoteOptions.YES)
+                {
+                    choice = "Yes";
+                    chatMessage = "player.voteforchange";
+                }
+                else if (param2 == (int)VoteOptions.NO)
+                {
+                    choice = "No";
+                    chatMessage = "player.voteagainstchange";
+                }
+                else
+                {
+                    break;
+                }
+
+                votePlayers.Add(player.Slot, choice);
+                if (!optionCounts.TryGetValue(choice, out int count))
+                    optionCounts[choice] = 1;
+                else
+                    optionCounts[choice] = count + 1;
+                if (Config.OtherSettings.PrintPlayersChoiceInChat)
+                {
+                    PrintToServerChat(chatMessage, player.PlayerName);
+                }
+                else
+                {
+                    PrintToPlayerChat(player, chatMessage, player.PlayerName);
+                }
+                break;
+            }
+            case PanoramaVoteAction.VoteAction_End:
+            {
+                if ((PanoramaVoteEndReason)param1 == PanoramaVoteEndReason.VoteEnd_Cancelled) // Vote Cancelled
+                {
+                    Server.PrintToChatAll($" {ChatColors.Red}VoteHandlerCallback: Vote Ended! Cancelled");
+                }
+                else if ((PanoramaVoteEndReason)param1 == PanoramaVoteEndReason.VoteEnd_AllVotes) // Everyone Voted
+                {
+                    Server.PrintToChatAll($" {ChatColors.Green}VoteHandlerCallback: Vote Ended! Thank you for participating.");
+                }
+                else if ((PanoramaVoteEndReason)param1 == PanoramaVoteEndReason.VoteEnd_TimeUp) // Time is up
+                {
+                    Server.PrintToChatAll($" {ChatColors.Red}VoteHandlerCallback: Vote Ended! Time is up.");
+                }
+
+                break;
+            }
+        }
+    }
+    private bool HandlerPanoramaVoteResult(PanoramaVoteInfo info)
+    {
+        IsVoteInProgress = false;
+        GlobalChatMenu = null;
+        GlobalWASDMenu = null;
+        //        string result;
+        if (info.yes_votes > info.num_clients * Config.VoteSettings.VotesToWin)
+        {
+            //            result = "voted.forchange";
+            return true;
+        }
+        else
+        {
+            //            result = "voted.againstchange";
+            return false;
+        }
+//        PrintToServerCenter(result);
+//        PrintToServerChat(result);
     }
     private void AdminSetNextMapHandle(CCSPlayerController player, IWasdMenuOption option)
     {
@@ -1624,7 +1731,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         if (wasdmenu)
         {
             ConfigMapsInVote = Config.VoteSettings.MapsInVote;
-            GlobalWASDMenu = wASDMenu.manager.CreateMenu("", Config.MenuSettings.FreezePlayerInMenu, true); //true - display options count
+            GlobalWASDMenu = wASDMenu.manager.CreateMenu("", Config.MenuSettings.FreezePlayerInMenu, Config.MenuSettings.DisplayVotesCount); //true - display options count
             if (GlobalWASDMenu == null)
             {
                 Logger.LogError($"GlobalWASDMenu is null but should bot be, something is wrong");
@@ -1812,8 +1919,6 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                             optionCounts["novote.line"] = 1;
                         else
                             optionCounts["novote.line"] = count + 1;
-                        _votedMap++;
-                        PrintToServerChat("player.choice", player.PlayerName, option.OptionDisplay);
                     }
                     wASDMenu.manager.CloseMenu(player);
                 }, "novote.line");
@@ -1830,8 +1935,6 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                             optionCounts["novote.line"] = 1;
                         else
                             optionCounts["novote.line"] = count + 1;
-                        _votedMap++;
-                        PrintToServerChat("player.choice", player.PlayerName, option.Text);
                     }
                     MenuManager.CloseActiveMenu(player);
                 });
@@ -1950,7 +2053,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
 
         if (!wasdmenu && GlobalChatMenu != null)
         {
-            GlobalChatMenu.PostSelectAction = PostSelectAction.Close;
+            GlobalChatMenu.PostSelectAction = CounterStrikeSharp.API.Modules.Menu.PostSelectAction.Close;
         }
 
         var playerEntities = Utilities.GetPlayers().Where(p => IsValidPlayer(p));
@@ -2928,7 +3031,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     private static bool IsValidPlayer(CCSPlayerController? p)
     {
         if (p != null && p.IsValid && p.SteamID.ToString().Length == 17 &&
-                p.Connected == PlayerConnectedState.PlayerConnected && !p.IsBot && !p.IsHLTV)
+                p.Connected == PlayerConnectedState.Connected && !p.IsBot && !p.IsHLTV)
         {
             return true;
         }
@@ -3348,13 +3451,14 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
 }
 public class WASDMenu 
 {
-    public WASDMenu (MapChooser plugin)
+    public WASDMenu(MapChooser plugin)
     {
-        Plugin = plugin;
-        Localizer = Plugin.Localizer;
+        _plugin = plugin;
+        Localizer = _plugin.Localizer;
+        manager = new(_plugin);
     }
-    MapChooser Plugin;
-    public WasdManager manager = new();  
+    private MapChooser _plugin;
+    public WasdManager manager;
     public static IStringLocalizer? Localizer = null;
     public static readonly Dictionary<int, WasdMenuPlayer> Players = new();
     private static readonly ConcurrentDictionary<int, (PlayerButtons Button, DateTime LastPress, int RepeatCount)> ButtonHoldState = new();
@@ -3367,56 +3471,56 @@ public class WASDMenu
     private PlayerButtons exit;
     public void ReadButtons()
     {
-        if (ButtonMapping.TryGetValue(Plugin.Config.MenuSettings.ScrollUp, out var scrollUpButton))
+        if (ButtonMapping.TryGetValue(_plugin.Config.MenuSettings.ScrollUp, out var scrollUpButton))
             scrollUp = scrollUpButton;
         else
             scrollUp = PlayerButtons.Forward;
 
-        if (ButtonMapping.TryGetValue(Plugin.Config.MenuSettings.ScrollDown, out var scrollDownButton))
+        if (ButtonMapping.TryGetValue(_plugin.Config.MenuSettings.ScrollDown, out var scrollDownButton))
             scrollDown = scrollDownButton;
         else
             scrollDown = PlayerButtons.Back;
 
-        if (ButtonMapping.TryGetValue(Plugin.Config.MenuSettings.Choose, out var chooseButton))
+        if (ButtonMapping.TryGetValue(_plugin.Config.MenuSettings.Choose, out var chooseButton))
             choose = chooseButton;
         else
             choose = PlayerButtons.Use;
 
-        if (ButtonMapping.TryGetValue(Plugin.Config.MenuSettings.Back, out var backButton))
+        if (ButtonMapping.TryGetValue(_plugin.Config.MenuSettings.Back, out var backButton))
             back = backButton;
         else
             back = PlayerButtons.Moveleft;
 
-        if (ButtonMapping.TryGetValue(Plugin.Config.MenuSettings.Exit, out var exitButton))
+        if (ButtonMapping.TryGetValue(_plugin.Config.MenuSettings.Exit, out var exitButton))
             exit = exitButton;
         else
             exit = PlayerButtons.Reload;
     }
     public void Load(bool hotReload)
     {
-        var wasdMenuManager = new WasdManager();
+//        var wasdMenuManager = new WasdManager();
 
-        Plugin.RegisterEventHandler<EventPlayerActivate>((@event, info) =>
+        _plugin.RegisterEventHandler<EventPlayerActivate>((@event, info) =>
         {
             if (@event.Userid != null && @event.Userid.IsValid && !@event.Userid.IsBot && !@event.Userid.IsHLTV)
             {
-                Players[@event.Userid.Slot] = new WasdMenuPlayer(Plugin)
+                Players[@event.Userid.Slot] = new WasdMenuPlayer(_plugin)
                 {
                     player = @event.Userid,
                     Buttons = @event.Userid.Buttons,
-                    Localizer = Plugin._localizer
+                    Localizer = _plugin._localizer
                 };
                 Players[@event.Userid.Slot].UpdateLocalization();
             }
             return HookResult.Continue;
         });
-        Plugin.RegisterEventHandler<EventPlayerDisconnect>((@event, info) =>
+        _plugin.RegisterEventHandler<EventPlayerDisconnect>((@event, info) =>
         {
             if (@event.Userid != null) Players.Remove(@event.Userid.Slot);
             return HookResult.Continue;
         });
         
-        Plugin.RegisterListener<Listeners.OnTick>(OnTick);
+        _plugin.RegisterListener<Listeners.OnTick>(OnTick);
         
         if(hotReload)
         {
@@ -3424,7 +3528,7 @@ public class WASDMenu
             {
                if (pl != null && pl.IsValid && !pl.IsBot && !pl.IsHLTV)
                {
-                    Players[pl.Slot] = new WasdMenuPlayer(Plugin)
+                    Players[pl.Slot] = new WasdMenuPlayer(_plugin)
                     {
                         player = pl,
                         Buttons = pl.Buttons
@@ -3436,7 +3540,7 @@ public class WASDMenu
     }
     public void Unload(bool hotReload)
     {
-        Plugin.RemoveListener<Listeners.OnTick>(OnTick);
+        _plugin.RemoveListener<Listeners.OnTick>(OnTick);
     }
     public void UpdatePlayersCenterHtml()
     {
@@ -3600,6 +3704,14 @@ public class VoteSettings
     [JsonPropertyName("EndMapVoteWASDMenu")]
     public bool EndMapVoteWASDMenu { get; set; } = true;
 
+    /* Yes/No Vote (to change map or not) in Panorama menu */
+    [JsonPropertyName("YesNoVotePanorama")]
+    public bool YesNoVotePanorama { get; set; } = true;
+
+    /* Panorama SFUI string for Yes/No vote */
+    [JsonPropertyName("PanoramaSFUIString")]
+    public string PanoramaSFUIString { get; set; } = "#SFUI_Vote_None";
+
     /* Time in seconds to wait while players make their choice */
     [JsonPropertyName("VotingTime")]
     public int VotingTime { get; set; } = 25;
@@ -3708,6 +3820,9 @@ public class DiscordSettings
 }
 public class WASDMenuSettings
 {    
+    /* Display Votes count in menu  */
+    [JsonPropertyName("DisplayVotesCount")]
+    public bool DisplayVotesCount { get; set; } = true;
     /* Play sound effects in menu: open, scroll, select  */
     [JsonPropertyName("SoundInMenu")]
     public bool SoundInMenu { get; set; } = true;

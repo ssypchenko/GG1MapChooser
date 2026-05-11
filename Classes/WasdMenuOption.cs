@@ -10,4 +10,6 @@ public class WasdMenuOption : IWasdMenuOption
     public int Index { get; set; }
     public int Count { get; set; }
     public string? Key { get; set; }
+    public DisableOption DisableOption { get; set; }
+    public PostSelectAction PostSelectAction { get; set; }
 }

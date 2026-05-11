@@ -28,6 +28,7 @@
   "change.map": "Simply Change Maps",
   "votefor.map": "Start Voting for Map",
   "vote.changeornot": "Vote to Change Map or Not",
+  "vote.changeornot.panorama": "-> Change Map or Not",
   "vote.yes": "Yes",
   "vote.no": "No",
   "player.voteforchange": "{0} voted {green}Yes",

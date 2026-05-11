@@ -185,11 +185,37 @@ public class WasdMenuPlayer
     {
         if (player != null)
         {
-            if (_plugin.Config.MenuSettings.SoundInMenu)
+            if (CurrentChoice?.Value?.DisableOption == DisableOption.None)
             {
-                player.ExecuteClientCommand("play Ui/buttonrollover.vsnd_c");
+                if (_plugin.Config.MenuSettings.SoundInMenu)
+                {
+                    player.ExecuteClientCommand("play Ui/buttonrollover.vsnd_c");
+                }
+                CurrentChoice?.Value.OnChoose?.Invoke(player, CurrentChoice.Value);
+                switch (CurrentChoice?.Value.PostSelectAction)
+                {
+                    case PostSelectAction.Close:
+                        if (MainMenu != null && MainMenu.FreezePlayer)
+                        {
+                            player.UnFreeze();
+                        }
+                        CloseAllSubMenus();
+                        break;
+                    case PostSelectAction.Reset:
+                        OpenMainMenu(MainMenu);
+                        break;
+                    case PostSelectAction.Nothing:
+                    default:
+                        break;
+                }
             }
-            CurrentChoice?.Value.OnChoose?.Invoke(player, CurrentChoice.Value);
+            else
+            {
+                if (_plugin.Config.MenuSettings.SoundInMenu)
+                {
+                    player.ExecuteClientCommand("play Ui/menu_negative.vsnd_c");
+                }
+            }
         }
     }
 
@@ -248,7 +274,6 @@ public class WasdMenuPlayer
             {
                 if (MainMenu.DisplayOptionsCount)
                 {
-
                     if (option?.Value.Count > 0)
                     {
                         votesText = $"<font color='green'>({option?.Value.Count})</font>";
@@ -260,11 +285,13 @@ public class WasdMenuPlayer
                 }
                 if (option == CurrentChoice)
                 {
-                    builder.AppendLine($"<font color='yellow'>{rightArrow}[</font> <font color='#9acd32' class='fontSize-m'>{option?.Value?.OptionDisplay}</font>{votesText} <font color='yellow'>]{leftArrow}</font></b><br>");
+                    string colour = option?.Value?.DisableOption == DisableOption.None ? "#9acd32" : "#808080";
+                    builder.AppendLine($"<font color='yellow'>{rightArrow}[</font> <font color='{colour}' class='fontSize-m'>{option?.Value?.OptionDisplay}</font>{votesText} <font color='yellow'>]{leftArrow}</font></b><br>");
                 }
                 else
                 {
-                    builder.AppendLine($"<font color='white' class='fontSize-m'>{option?.Value?.OptionDisplay}</font>{votesText}<br>");
+                    string colour = option?.Value?.DisableOption == DisableOption.None ? "white" : "#808080";
+                    builder.AppendLine($"<font color='{colour}' class='fontSize-m'>{option?.Value?.OptionDisplay}</font>{votesText}<br>");
                 }
                 i++;
                 option = option?.Next;

@@ -9,7 +9,15 @@ public class WasdMenu : IWasdMenu
     public bool DisplayOptionsCount { get; set; } = false;
     public LinkedList<IWasdMenuOption>? Options { get; set; } = new();
     public LinkedListNode<IWasdMenuOption>? Prev { get; set; } = null;
-    public LinkedListNode<IWasdMenuOption> Add(string display, Action<CCSPlayerController, IWasdMenuOption> onChoice, string? key = null)
+    public LinkedListNode<IWasdMenuOption> AddItem(string display, string? key = null, DisableOption disableOption = DisableOption.None, PostSelectAction postSelectAction = PostSelectAction.Nothing)
+    {
+        return Add(display, null!, key, disableOption, postSelectAction);
+    }
+    public LinkedListNode<IWasdMenuOption> AddItem(string display, Action<CCSPlayerController, IWasdMenuOption> onChoice, string? key = null, DisableOption disableOption = DisableOption.None, PostSelectAction postSelectAction = PostSelectAction.Nothing)
+    {
+        return Add(display, onChoice, key, disableOption, postSelectAction);
+    }
+    public LinkedListNode<IWasdMenuOption> Add(string display, Action<CCSPlayerController, IWasdMenuOption> onChoice, string? key = null, DisableOption disableOption = DisableOption.None, PostSelectAction postSelectAction = PostSelectAction.Nothing)
     {
         if (Options == null)
             Options = new();
@@ -20,7 +28,9 @@ public class WasdMenu : IWasdMenu
             Index = Options.Count,
             Count = 0,
             Key = key,
-            Parent = this
+            Parent = this,
+            DisableOption = disableOption,
+            PostSelectAction = postSelectAction
         };
         return Options.AddLast(newOption);
     }

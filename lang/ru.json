@@ -28,6 +28,7 @@
   "change.map": "Просто поменять карту",
   "votefor.map": "Поставить голосование за карту",
   "vote.changeornot": "Голосуем менять карту или нет",
+  "vote.changeornot.panorama": "Голосуем менять карту или нет",
   "vote.yes": "Да",
   "vote.no": "Нет",
   "player.voteforchange": "{0} проголосовал {green}Да",
