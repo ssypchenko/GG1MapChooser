@@ -87,7 +87,7 @@ public class PanoramaVote
         {
             EndVote(PanoramaVoteEndReason.VoteEnd_TimeUp);
         }, TimerFlags.STOP_ON_MAPCHANGE);
-        Server.PrintToChatAll("A vote has started!");
+        _plugin.Logger.LogInformation("[PanoramaVote] Vote user message sent.");
     }
     private void UpdatePlayerIDs()
     {
@@ -151,8 +151,8 @@ public class PanoramaVote
         _IsVoteInProgress = true;
         // set recipients which should get the message (if applicable)
         RecipientFilter recipientFilter = [];
-        // send message to each recipient to allow individual translation
-        Server.PrintToChatAll($"Starting Vote with {_playerIDs.Count} players eligible to vote.");
+        // Send message to each recipient to allow individual translation.
+        _plugin.Logger.LogInformation($"[PanoramaVote] Starting vote with {_playerIDs.Count} eligible players.");
         foreach (int playerID in _playerIDs)
         {
             CCSPlayerController? player = Utilities.GetPlayerFromUserid(playerID);
