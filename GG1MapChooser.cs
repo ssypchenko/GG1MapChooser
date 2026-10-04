@@ -38,7 +38,7 @@ namespace MapChooser;
 public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
 {
     public override string ModuleName => "GG1_MapChooser";
-    public override string ModuleVersion => "v1.8.0";
+    public override string ModuleVersion => "v1.8.1";
     public override string ModuleAuthor => "Sergey";
     public override string ModuleDescription => "Map chooser, voting, rtv, nominate, etc.";
     public MCCoreAPI MCCoreAPI { get; set; } = null!;
@@ -140,10 +140,11 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     public ChatMenu? PoolChatMenu { get; set; } = null;
     public IWasdMenu? PoolWASDMenu { get; set; } = null;
     public WASDMenu wASDMenu { get; set; }
-//    public WasdMenuMM WASDMenuMM { get; set; }
+    //    public WasdMenuMM WASDMenuMM { get; set; }
     private Dictionary<string, int> optionCounts = new Dictionary<string, int>();
     private Dictionary<string, int> poolOptionCounts = new Dictionary<string, int>();
     private Timer? voteTimer = null;
+    private Timer? voteResultTimer = null;
     private Timer? poolVoteTimer = null;
     private Dictionary<int, string> poolVotePlayers = new Dictionary<int, string>();
     //    public string EmergencyMap { get; set; } = "";
@@ -160,6 +161,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     private bool _lowPlayerModeActive = false;
     public string MapToChange = "";
     private readonly object _timerLock = new object();
+    private bool _emptyServerHandled = false;
     public CCSGameRules? gameRules;
     private bool _matchStarted = false;
     public WasdManager wasdMenuManager;
@@ -176,7 +178,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         {
             Logger.LogWarning("GGMC API not registered");
         }
-//        wasdMenuManager = new WasdManager(this);
+        //        wasdMenuManager = new WasdManager(this);
         if (wasdMenuManager != null)
         {
             Capabilities.RegisterPluginCapability(WasdMenuManagerCapability, () => wasdMenuManager);
@@ -272,52 +274,64 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     }
     private void OnClientDisconnect(int slot)
     {
-        if (canVote)
+        if (slot < 0 || slot >= players.Length)
         {
-            if (players[slot] != null)
-            {
-                if (players[slot].putInServer)
-                {
-                    var playerEntities = Utilities.GetPlayers().Where(p => IsValidPlayer(p));
-                    if (playerEntities != null && playerEntities.Any())
-                    {
-                        if (players[slot].HasProposedMaps())
-                        {
-                            nominatedMaps.Remove(players[slot].ProposedMaps);
-                        }
-                        if (Config.RTVSettings.AllowRTV && IsRTVThreshold(false))  // если достаточно голосов - запускаем голосование
-                        {
-                            Logger.LogInformation($"Start rtv because of disconnected player and rtv threshold");
-                            StartRTV();
-                        }
-                    }
-                    else
-                    {
-                        ResetData("On last client disconnect");
-                        //*********                        
-                        if (timersLog != null)
-                        {
-                            try
-                            {
-                                timersLog.Kill();
-                            }
-                            catch (System.Exception)
-                            {
+            return;
+        }
 
-                            }
-                        }
-                        timersLog = null;
-                        //*********
-                        if (Config.OtherSettings.LastDisconnectedChangeMap && changeRequested == null && !MapIsChanging)
-                        {
-                            Logger.LogInformation($"Requested map change on last disconnected player");
-                            changeRequested = AddTimer(60.0f, Timer_ChangeMapOnEmpty, TimerFlags.STOP_ON_MAPCHANGE);
-                        }
+        Player? disconnectedPlayer = players[slot];
+        bool wasPutInServer = disconnectedPlayer?.putInServer == true;
+        string proposedMaps = disconnectedPlayer?.HasProposedMaps() == true
+            ? disconnectedPlayer.ProposedMaps
+            : string.Empty;
+
+        players[slot] = null!;
+        HandleClientDisconnect(wasPutInServer, proposedMaps);
+    }
+
+    private void HandleClientDisconnect(bool wasPutInServer, string proposedMaps)
+    {
+        if (canVote && wasPutInServer)
+        {
+            if (!string.IsNullOrEmpty(proposedMaps))
+            {
+                nominatedMaps.Remove(proposedMaps);
+            }
+
+            bool hasRemainingPlayers = players.Any(player => player?.putInServer == true);
+            if (hasRemainingPlayers)
+            {
+                _emptyServerHandled = false;
+                if (Config.RTVSettings.AllowRTV && IsRTVThreshold(false))
+                {
+                    Logger.LogInformation("Starting RTV because a player disconnected and the threshold was reached.");
+                    StartRTV();
+                }
+            }
+            else if (!_emptyServerHandled)
+            {
+                _emptyServerHandled = true;
+                ResetData("On last client disconnect", true);
+                if (timersLog != null)
+                {
+                    try
+                    {
+                        timersLog.Kill();
+                    }
+                    catch (System.Exception)
+                    {
                     }
                 }
-                players[slot] = null!;
+                timersLog = null;
+
+                if (Config.OtherSettings.LastDisconnectedChangeMap && changeRequested == null && !MapIsChanging)
+                {
+                    Logger.LogInformation("Requested a map change after the last player disconnected.");
+                    changeRequested = AddTimer(60.0f, Timer_ChangeMapOnEmpty, TimerFlags.STOP_ON_MAPCHANGE);
+                }
             }
         }
+
         UpdateLowPlayerMode(true);
     }
     private void OnClientPutInServer(int slot)
@@ -325,6 +339,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         var p = Utilities.GetPlayerFromSlot(slot);
         if (p != null && p.IsValid && slot < 65 && !p.IsBot && !p.IsHLTV)
         {
+            _emptyServerHandled = false;
             if (players[slot] == null)
             {
                 players[slot] = new Player();
@@ -485,6 +500,9 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     private void OnMapEnd()
     {
         Logger.LogInformation("OnMapEnd executed");
+        // Both map vote timers use STOP_ON_MAPCHANGE, so only their managed references need clearing here.
+        ResetMapVoteTimers(false);
+        IsVoteInProgress = false;
         SimpleKillTimer(changeRequested);
         changeRequested = null;
         SimpleKillTimer(_timeLimitTimer);
@@ -1095,6 +1113,52 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     {
         return ParseMenuMode(Config.PoolVoteSettings.MenuMode);
     }
+    private void ResetMapVoteTimers(bool stopTimers)
+    {
+        Timer? countdownTimer = voteTimer;
+        Timer? resultTimer = voteResultTimer;
+
+        voteTimer = null;
+        voteResultTimer = null;
+
+        if (!stopTimers)
+            return;
+
+        TryKillMapVoteTimer(countdownTimer, "voteTimer");
+        TryKillMapVoteTimer(resultTimer, "voteResultTimer");
+    }
+    private void TryKillMapVoteTimer(Timer? timer, string timerName)
+    {
+        if (timer == null)
+            return;
+
+        try
+        {
+            timer.Kill();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, $"Error killing {timerName}");
+        }
+    }
+    private void ClearStaleMapVoteTimers(string source)
+    {
+        if (voteTimer == null && voteResultTimer == null)
+            return;
+
+        Logger.LogWarning($"{source}: Found stale map vote timer state. Clearing it before starting a new vote.");
+        ResetMapVoteTimers(true);
+    }
+    private void BeginMapVote(CCSPlayerController caller, int duration, SSMC_ChangeMapTime changeTime, MenuMode menuMode, string source)
+    {
+        ClearStaleMapVoteTimers(source);
+        IsVoteInProgress = true;
+        timeToVote = duration;
+        VotesCounter = 0;
+        voteTimer = AddTimer(1.0f, EndOfVotes, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE);
+        Logger.LogInformation($"Vote Timer started at {source}");
+        DoAutoMapVote(caller, duration, changeTime, menuMode);
+    }
     //Start vote at the beginning of the round according to rules of Round Manager
     private void StartVote()
     {
@@ -1111,49 +1175,9 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             return;
         }
 
-        if (voteTimer == null)
-        {
-            _mapVoteQueued = false;
-            IsVoteInProgress = true;
-            roundsManager.MaxRoundsVoted = true;
-            timeToVote = Config.VoteSettings.VotingTime;
-            VotesCounter = 0;
-            voteTimer = AddTimer(1.0f, EndOfVotes, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE);
-            Logger.LogInformation("Vote Timer started at StartVote");
-            DoAutoMapVote(null!, timeToVote, SSMC_ChangeMapTime.ChangeMapTime_MapEnd, GetVoteMenuMode());
-        }
-        else
-        {
-            // If a timer exists but IsVoteInProgress is false, the timer is likely stale.
-            // Clear it and proceed to start a fresh vote to avoid blocking Admin/TimeLimit triggers.
-            if (!IsVoteInProgress)
-            {
-                Logger.LogWarning("StartVote: Found stale voteTimer (IsVoteInProgress=false). Clearing and restarting vote.");
-                try
-                {
-                    SimpleKillTimer(voteTimer);
-                }
-                catch (Exception ex)
-                {
-                    Logger.LogError(ex, "StartVote: Error while killing stale voteTimer");
-                }
-                voteTimer = null;
-
-                // Start the vote now after clearing stale timer
-                _mapVoteQueued = false;
-                IsVoteInProgress = true;
-                roundsManager.MaxRoundsVoted = true;
-                timeToVote = Config.VoteSettings.VotingTime;
-                VotesCounter = 0;
-                voteTimer = AddTimer(1.0f, EndOfVotes, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE);
-                Logger.LogInformation("Vote Timer started at StartVote after clearing stale timer");
-                DoAutoMapVote(null!, timeToVote, SSMC_ChangeMapTime.ChangeMapTime_MapEnd, GetVoteMenuMode());
-            }
-            else
-            {
-                Logger.LogInformation("Vote Timer already works, we don't start new Vote at StartVote");
-            }
-        }
+        _mapVoteQueued = false;
+        roundsManager.MaxRoundsVoted = true;
+        BeginMapVote(null!, Config.VoteSettings.VotingTime, SSMC_ChangeMapTime.ChangeMapTime_MapEnd, GetVoteMenuMode(), "StartVote");
     }
     // Автоматическая смена карты на рандомную подходящую
     private void GGMCDoAutoMapChange(SSMC_ChangeMapTime changeTime = SSMC_ChangeMapTime.ChangeMapTime_Now)
@@ -1593,7 +1617,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     {
         if (IsValidPlayer(caller))
         {
-            
+
             IWasdMenu? acm_menu;
             using (new WithTemporaryCulture(caller.GetLanguage()))
             {
@@ -1602,7 +1626,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                 acm_menu.Add(_localizer["automatic.map"], AdminChangeMapAuto); // Start voting for map
             }
             acm_menu.Prev = option.Parent?.Options?.Find(option);
-            wASDMenu.manager.OpenSubMenu(caller, acm_menu); 
+            wASDMenu.manager.OpenSubMenu(caller, acm_menu);
         }
     }
     //  Админ выбрал ручной выбор для смены, выбор карты и смена
@@ -1752,19 +1776,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             return;
         }
 
-        if (voteTimer == null)
-        {
-            IsVoteInProgress = true;
-            timeToVote = Config.VoteSettings.VotingTime;
-            VotesCounter = 0;
-            voteTimer = AddTimer(1.0f, EndOfVotes, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE);
-            DoAutoMapVote(null!, timeToVote, SSMC_ChangeMapTime.ChangeMapTime_Now, GetVoteMenuMode());
-            Logger.LogInformation("Vote Timer started at AdminVoteMapAuto");
-        }
-        else
-        {
-            Logger.LogInformation("Vote Timer already works, we don't start new Vote at AdminVoteMapAuto");
-        }
+        BeginMapVote(null!, Config.VoteSettings.VotingTime, SSMC_ChangeMapTime.ChangeMapTime_Now, GetVoteMenuMode(), "AdminVoteMapAuto");
     }
     //  Старт голосования "менять карту или нет"
     private void VotesForChangeMapHandle(CCSPlayerController caller, IWasdMenuOption option)
@@ -1946,67 +1958,67 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         switch (action)
         {
             case PanoramaVoteAction.VoteAction_Start: // On Vote Start
-            {
-                Logger.LogInformation("PanoramaVote: Change map or not vote started.");
-                break;
-            }
+                {
+                    Logger.LogInformation("PanoramaVote: Change map or not vote started.");
+                    break;
+                }
             case PanoramaVoteAction.VoteAction_Vote: // On Player Vote: param1 = client slot, param2 = choice (VOTE_OPTION1=yes, VOTE_OPTION2=no)
-            {
-                CCSPlayerController player = Utilities.GetPlayerFromSlot(param1)!;
-                if (player == null || !player.IsValid || player.Connected != PlayerConnectedState.Connected)
                 {
+                    CCSPlayerController player = Utilities.GetPlayerFromSlot(param1)!;
+                    if (player == null || !player.IsValid || player.Connected != PlayerConnectedState.Connected)
+                    {
+                        break;
+                    }
+
+                    string choice;
+                    string chatMessage;
+                    if (param2 == (int)VoteOptions.YES)
+                    {
+                        choice = "Yes";
+                        chatMessage = "player.voteforchange";
+                    }
+                    else if (param2 == (int)VoteOptions.NO)
+                    {
+                        choice = "No";
+                        chatMessage = "player.voteagainstchange";
+                    }
+                    else
+                    {
+                        break;
+                    }
+
+                    votePlayers.Add(player.Slot, choice);
+                    if (!optionCounts.TryGetValue(choice, out int count))
+                        optionCounts[choice] = 1;
+                    else
+                        optionCounts[choice] = count + 1;
+                    if (Config.OtherSettings.PrintPlayersChoiceInChat)
+                    {
+                        PrintToServerChat(chatMessage, player.PlayerName);
+                    }
+                    else
+                    {
+                        PrintToPlayerChat(player, chatMessage, player.PlayerName);
+                    }
                     break;
                 }
-
-                string choice;
-                string chatMessage;
-                if (param2 == (int)VoteOptions.YES)
-                {
-                    choice = "Yes";
-                    chatMessage = "player.voteforchange";
-                }
-                else if (param2 == (int)VoteOptions.NO)
-                {
-                    choice = "No";
-                    chatMessage = "player.voteagainstchange";
-                }
-                else
-                {
-                    break;
-                }
-
-                votePlayers.Add(player.Slot, choice);
-                if (!optionCounts.TryGetValue(choice, out int count))
-                    optionCounts[choice] = 1;
-                else
-                    optionCounts[choice] = count + 1;
-                if (Config.OtherSettings.PrintPlayersChoiceInChat)
-                {
-                    PrintToServerChat(chatMessage, player.PlayerName);
-                }
-                else
-                {
-                    PrintToPlayerChat(player, chatMessage, player.PlayerName);
-                }
-                break;
-            }
             case PanoramaVoteAction.VoteAction_End:
-            {
-                if ((PanoramaVoteEndReason)param1 == PanoramaVoteEndReason.VoteEnd_Cancelled) // Vote Cancelled
                 {
-                    Logger.LogInformation("PanoramaVote: Vote ended because it was cancelled.");
-                }
-                else if ((PanoramaVoteEndReason)param1 == PanoramaVoteEndReason.VoteEnd_AllVotes) // Everyone Voted
-                {
-                    Logger.LogInformation("PanoramaVote: Vote ended because everyone voted.");
-                }
-                else if ((PanoramaVoteEndReason)param1 == PanoramaVoteEndReason.VoteEnd_TimeUp) // Time is up
-                {
-                    Logger.LogInformation("PanoramaVote: Vote ended because time expired.");
-                }
+                    if ((PanoramaVoteEndReason)param1 == PanoramaVoteEndReason.VoteEnd_Cancelled) // Vote Cancelled
+                    {
+                        Logger.LogInformation("PanoramaVote: Vote ended because it was cancelled.");
+                    }
+                    else if ((PanoramaVoteEndReason)param1 == PanoramaVoteEndReason.VoteEnd_AllVotes) // Everyone Voted
+                    {
+                        Logger.LogInformation("PanoramaVote: Vote ended because everyone voted.");
+                    }
+                    else if ((PanoramaVoteEndReason)param1 == PanoramaVoteEndReason.VoteEnd_TimeUp) // Time is up
+                    {
+                        Logger.LogInformation("PanoramaVote: Vote ended because time expired.");
+                    }
 
-                break;
-            }
+                    break;
+                }
         }
     }
     private bool HandlerPanoramaVoteResult(PanoramaVoteInfo info)
@@ -2025,8 +2037,8 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             //            result = "voted.againstchange";
             return false;
         }
-//        PrintToServerCenter(result);
-//        PrintToServerChat(result);
+        //        PrintToServerCenter(result);
+        //        PrintToServerChat(result);
     }
     private void AdminSetNextMapHandle(CCSPlayerController player, IWasdMenuOption option)
     {
@@ -2286,13 +2298,13 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                 int currentmapweight;
                 if (numplayers == 0) numplayers = 1;
                 //  create map list to chose
-        foreach (var mapcheck in mapPool)
-        {
-            if ((mapcheck.Value.MinPlayers != 0 && numplayers < mapcheck.Value.MinPlayers)
-                || (mapcheck.Value.MaxPlayers != 0 && numplayers > mapcheck.Value.MaxPlayers)
-                || _playedMaps.Contains(mapcheck.Key.ToLower())
-                || (mapsToVote.Count > 0 && mapsToVote.Contains(mapcheck.Key))
-                || mapcheck.Value.Weight == 0)
+                foreach (var mapcheck in mapPool)
+                {
+                    if ((mapcheck.Value.MinPlayers != 0 && numplayers < mapcheck.Value.MinPlayers)
+                        || (mapcheck.Value.MaxPlayers != 0 && numplayers > mapcheck.Value.MaxPlayers)
+                        || _playedMaps.Contains(mapcheck.Key.ToLower())
+                        || (mapsToVote.Count > 0 && mapsToVote.Contains(mapcheck.Key))
+                        || mapcheck.Value.Weight == 0)
                     {
                         continue; //  map does not suite
                     }
@@ -2591,7 +2603,11 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                 player.ExecuteClientCommand("play " + Config.OtherSettings.VoteStartSound);
         }
 
-        AddTimer((float)timeToMapVote, () => TimerVoteMap(changeTime), TimerFlags.STOP_ON_MAPCHANGE);
+        voteResultTimer = AddTimer((float)timeToMapVote, () =>
+        {
+            voteResultTimer = null;
+            TimerVoteMap(changeTime);
+        }, TimerFlags.STOP_ON_MAPCHANGE);
         Logger.LogInformation($"TimerVoteMap started to trigger in {timeToMapVote}");
     }
     private void TryOpenWASDMenu(CCSPlayerController pl)
@@ -3089,28 +3105,16 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             Logger.LogInformation("MapVoteCommand: Another vote active when ggmc_mapvote_start. Skip votes");
             return;
         }
-        IsVoteInProgress = true;
         Logger.LogInformation("MapVoteCommand: ggmc_mapvote_start votes");
-        timeToVote = Config.VoteSettings.VotingTime;
-        VotesCounter = 0;
+        int voteDuration = Config.VoteSettings.VotingTime;
         if (command != null && command.ArgCount > 1)
         {
             if (int.TryParse(command.ArgByIndex(1), out int intValue) && intValue > 0 && intValue < 59)
             {
-                timeToVote = intValue;
+                voteDuration = intValue;
             }
         }
-        if (voteTimer == null)
-        {
-            voteTimer = AddTimer(1.0f, EndOfVotes, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE);
-            DoAutoMapVote(null!, timeToVote, SSMC_ChangeMapTime.ChangeMapTime_MapEnd, GetVoteMenuMode());
-            Logger.LogInformation("Vote Timer started at MapVoteCommand");
-        }
-        else
-        {
-            IsVoteInProgress = false;
-            Logger.LogInformation("Vote Timer already works, we don't start new Vote at MapVoteCommand");
-        }
+        BeginMapVote(null!, voteDuration, SSMC_ChangeMapTime.ChangeMapTime_MapEnd, GetVoteMenuMode(), "MapVoteCommand");
     }
     [ConsoleCommand("ggmc_mapvote_with_change", "Start map vote and change after the result.")]
     [CommandHelper(whoCanExecute: CommandUsage.SERVER_ONLY)]
@@ -3130,28 +3134,16 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             Logger.LogInformation("MapVoteCommand: Another vote active when ggmc_mapvote_with_change. Skip votes");
             return;
         }
-        IsVoteInProgress = true;
         Logger.LogInformation("MapVoteChangeCommand: ggmc_mapvote_with_change start votes");
-        timeToVote = Config.VoteSettings.VotingTime;
-        VotesCounter = 0;
+        int voteDuration = Config.VoteSettings.VotingTime;
         if (command != null && command.ArgCount > 1)
         {
             if (int.TryParse(command.ArgByIndex(1), out int intValue) && intValue > 0 && intValue < 59)
             {
-                timeToVote = intValue;
+                voteDuration = intValue;
             }
         }
-        if (voteTimer == null)
-        {
-            voteTimer = AddTimer(1.0f, EndOfVotes, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE);
-            DoAutoMapVote(null!, timeToVote, SSMC_ChangeMapTime.ChangeMapTime_Now, GetVoteMenuMode());
-            Logger.LogInformation("Vote Timer started at MapVoteChangeCommand");
-        }
-        else
-        {
-            IsVoteInProgress = false;
-            Logger.LogInformation("Vote Timer already works, we don't start new Vote at MapVoteChangeCommand");
-        }
+        BeginMapVote(null!, voteDuration, SSMC_ChangeMapTime.ChangeMapTime_Now, GetVoteMenuMode(), "MapVoteChangeCommand");
     }
     [ConsoleCommand("ggmc_auto_mapchange", "Automatically change the map to a random map.")]
     [CommandHelper(whoCanExecute: CommandUsage.SERVER_ONLY)]
@@ -3725,9 +3717,10 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             }, TimerFlags.STOP_ON_MAPCHANGE);
         }
     }
-    private void ResetData(string Reason)
+    private void ResetData(string Reason, bool stopVoteTimers = false)
     {
         Logger.LogInformation($"ResetData from {Reason}");
+        ResetMapVoteTimers(stopVoteTimers);
         IsVoteInProgress = false;
         IsPoolVoteInProgress = false;
         _mapVoteQueued = false;
@@ -4585,7 +4578,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             gameRules = gameRulesProxy.GameRules;
     }
 }
-public class WASDMenu 
+public class WASDMenu
 {
     public WASDMenu(MapChooser plugin)
     {
@@ -4634,7 +4627,7 @@ public class WASDMenu
     }
     public void Load(bool hotReload)
     {
-//        var wasdMenuManager = new WasdManager();
+        //        var wasdMenuManager = new WasdManager();
 
         _plugin.RegisterEventHandler<EventPlayerActivate>((@event, info) =>
         {
@@ -4655,22 +4648,22 @@ public class WASDMenu
             if (@event.Userid != null) Players.Remove(@event.Userid.Slot);
             return HookResult.Continue;
         });
-        
+
         _plugin.RegisterListener<Listeners.OnTick>(OnTick);
-        
-        if(hotReload)
+
+        if (hotReload)
         {
             foreach (var pl in Utilities.GetPlayers())
             {
-               if (pl != null && pl.IsValid && !pl.IsBot && !pl.IsHLTV)
-               {
+                if (pl != null && pl.IsValid && !pl.IsBot && !pl.IsHLTV)
+                {
                     Players[pl.Slot] = new WasdMenuPlayer(_plugin)
                     {
                         player = pl,
                         Buttons = pl.Buttons
                     };
                     Players[pl.Slot].UpdateLocalization();
-               }
+                }
             }
         }
     }
@@ -4687,18 +4680,18 @@ public class WASDMenu
     }
     public void OnTick()
     {
-/*        if (Plugin.gameRules == null)
-        {
-            Plugin.InitGameRules();
-        }
-        else
-        {
-            Plugin.gameRules.GameRestart = Plugin.roundRestart;
-        } */
+        /*        if (Plugin.gameRules == null)
+                {
+                    Plugin.InitGameRules();
+                }
+                else
+                {
+                    Plugin.gameRules.GameRestart = Plugin.roundRestart;
+                } */
         DateTime now = DateTime.Now;
         foreach (var player in Players.Values.Where(p => p.MainMenu != null))
         {
-            var controller = player.player!;       
+            var controller = player.player!;
             PlayerButtons currentButtons = controller.Buttons;
 
             if (!ButtonHoldState.TryGetValue(controller.Slot, out var holdState))
@@ -4745,14 +4738,14 @@ public class WASDMenu
         {
             player.ScrollUp();
         }
-        else if((button & scrollDown) != 0 && ((player.Buttons & scrollDown) == 0 || repeat > 0))
+        else if ((button & scrollDown) != 0 && ((player.Buttons & scrollDown) == 0 || repeat > 0))
         {
             player.ScrollDown();
         }
-        else if((button & choose) != 0 && ((player.Buttons & choose) == 0 || repeat > 0))
+        else if ((button & choose) != 0 && ((player.Buttons & choose) == 0 || repeat > 0))
         {
             player.Choose();
-        } 
+        }
         else if ((button & back) != 0 && ((player.Buttons & back) == 0 || repeat > 0))
         {
             player.CloseSubMenu();
@@ -4793,7 +4786,7 @@ public class WASDMenu
         { "Tab", (PlayerButtons)8589934592 }
     };
 }
-public class MCConfig : BasePluginConfig 
+public class MCConfig : BasePluginConfig
 {
     [JsonPropertyName("VoteSettings")]
     public VoteSettings VoteSettings { get; set; } = new VoteSettings();
@@ -4878,7 +4871,7 @@ public class VoteSettings
     /* Set false to prevent votes by Spectators. */
     [JsonPropertyName("SpectatorsCanVote")]
     public bool SpectatorsCanVote { get; set; } = true;
-    
+
     /* Set true to include as the first line in the vote - NoVote to prevent accidental voting. */
     [JsonPropertyName("IncludeNoVote")]
     public bool IncludeNoVote { get; set; } = false;
@@ -4887,7 +4880,7 @@ public class RTVSettings
 {
     [JsonPropertyName("AllowRTV")]
     public bool AllowRTV { get; set; } = true;
-    
+
     /* Time (in seconds) before first RTV can be held. */
     [JsonPropertyName("RTVDelayFromStart")]
     public int RTVDelayFromStart { get; set; } = 90;
@@ -4984,9 +4977,9 @@ public class TimeLimitSettings
     /* Time to extend time limit to finish the round. It can be extended two times only */
     [JsonPropertyName("MinutesExtendTimeLimitToRoundEnd")]
     public int MinutesExtendTimeLimitToRoundEnd { get; set; } = 3;
-}   
+}
 public class DiscordSettings
-{  
+{
     /* Discord webhook link to logging map change*/
     [JsonPropertyName("DiscordWebhook")]
     public string DiscordWebhook { get; set; } = "";
@@ -5003,7 +4996,7 @@ public class DiscordSettings
     public string PictureExtension { get; set; } = "jpg";
 }
 public class WASDMenuSettings
-{    
+{
     /* Display Votes count in menu  */
     [JsonPropertyName("DisplayVotesCount")]
     public bool DisplayVotesCount { get; set; } = true;
@@ -5031,7 +5024,7 @@ public class WASDMenuSettings
     public string Exit { get; set; } = "R";
 }
 public class OtherSettings
-{    
+{
     /* Print Player's choice to other players in Chat.  */
     [JsonPropertyName("PrintPlayersChoiceInChat")]
     public bool PrintPlayersChoiceInChat { get; set; } = true;
@@ -5058,7 +5051,7 @@ public class OtherSettings
     /* Change map to random after the last player disconnected */
     [JsonPropertyName("LastDisconnectedChangeMap")]
     public bool LastDisconnectedChangeMap { get; set; } = true;
-    
+
     /* Check if problems with Workshop map  in collection (if it doesn't exists, server default map will be loaded, so plugin change to a random map) */
     [JsonPropertyName("WorkshopMapProblemCheck")]
     public bool WorkshopMapProblemCheck { get; set; } = true;
@@ -5102,7 +5095,7 @@ public class MapInfo
 }
 public class Player
 {
-    public Player ()
+    public Player()
     {
         ProposedMaps = "";
         VotedRtv = false;
@@ -5128,7 +5121,7 @@ public class Player
 }
 public class MaxRoundsManager
 {
-    public MaxRoundsManager (MapChooser plugin)
+    public MaxRoundsManager(MapChooser plugin)
     {
         Plugin = plugin;
         MaxRoundsValue = -1;
@@ -5152,7 +5145,7 @@ public class MaxRoundsManager
             }
             if (Plugin.gameRules != null)
                 return Plugin.gameRules.WarmupPeriod;
-            return false; 
+            return false;
         }
     }
     public void InitialiseMap()
@@ -5163,7 +5156,7 @@ public class MaxRoundsManager
         if (CvarCanClinch != null)
         {
             CanClinch = CvarCanClinch.GetPrimitiveValue<bool>();
-//            Plugin.Logger.LogInformation($"On Initialise Map set: CanClinch {(CanClinch ? "true" : "false")}");
+            //            Plugin.Logger.LogInformation($"On Initialise Map set: CanClinch {(CanClinch ? "true" : "false")}");
         }
         else
         {
@@ -5178,7 +5171,7 @@ public class MaxRoundsManager
         {
             var CvarMaxRounds = ConVar.Find("mp_maxrounds");
             if (CvarMaxRounds != null)
-            {    
+            {
                 MaxRoundsValue = CvarMaxRounds.GetPrimitiveValue<int>();
             }
             else
@@ -5317,7 +5310,8 @@ public class WebhookService
         {
             // Log and handle network-related errors
             Console.WriteLine($"HttpRequestException occurred: {ex.Message}");
-            Server.NextFrame(() => {
+            Server.NextFrame(() =>
+            {
                 Plugin.Logger.LogError($"SendWebhookMessage: HttpRequestException occurred: {ex.Message}");
             });
         }
@@ -5325,7 +5319,8 @@ public class WebhookService
         {
             // Handle request timeout scenarios
             Console.WriteLine($"Request timed out: {ex.Message}");
-            Server.NextFrame(() => {
+            Server.NextFrame(() =>
+            {
                 Plugin.Logger.LogError($"SendWebhookMessage: Request timed out: {ex.Message}");
             });
         }
@@ -5333,7 +5328,8 @@ public class WebhookService
         {
             // Catch all other exceptions
             Console.WriteLine($"An error occurred: {ex.Message}");
-            Server.NextFrame(() => {
+            Server.NextFrame(() =>
+            {
                 Plugin.Logger.LogError($"SendWebhookMessage: An error occurred: {ex.Message}");
             });
         }
@@ -5351,7 +5347,7 @@ public class WebhookService
             var embed = embeds[0].Clone();
             var imageUrl = embed.GetProperty("image").GetProperty("url").GetString();
             imageUrl = imageUrl + mapName + "." + Plugin.Config.DiscordSettings.PictureExtension;
-            
+
             // Construct new JSON object
             var updatedJson = new
             {
@@ -5368,7 +5364,7 @@ public class WebhookService
                 }
             };
 
-//            var options = new JsonSerializerOptions { WriteIndented = true };
+            //            var options = new JsonSerializerOptions { WriteIndented = true };
             return JsonSerializer.Serialize(updatedJson);
         }
     }
@@ -5403,7 +5399,8 @@ public class ManagedTimer
             }
             catch (Exception ex)
             {
-                Server.NextFrame (() => {
+                Server.NextFrame(() =>
+                {
                     _plugin.Logger.LogError($"Timer {Name} callback failed: {ex.Message}");
                 });
             }
@@ -5428,7 +5425,8 @@ public class ManagedTimer
             }
             catch (Exception ex)
             {
-                Server.NextFrame (() => {
+                Server.NextFrame(() =>
+                {
                     _plugin.Logger.LogError($"Timer {Name} force callback failed: {ex.Message}");
                 });
             }
@@ -5441,7 +5439,8 @@ public class ManagedTimer
             }
             catch (Exception ex)
             {
-                Server.NextFrame (() => {
+                Server.NextFrame(() =>
+                {
                     _plugin.Logger.LogError($"Timer {Name} force kill failed: {ex.Message}");
                 });
             }
@@ -5465,7 +5464,7 @@ public class TimerManager2
 {
     private readonly Dictionary<string, ManagedTimer> _timers = new();
     private MapChooser _plugin;
-    public TimerManager2 (MapChooser plugin)
+    public TimerManager2(MapChooser plugin)
     {
         _plugin = plugin;
     }
@@ -5557,7 +5556,7 @@ public class MCCoreAPI : MCIAPI
                 if (_mapChooser.Maps_from_List[mapName].Weight == -1)
                 {
                     _mapChooser.Maps_from_List[mapName].Weight = newWeight;
-//                    Console.WriteLine($"**************[GGMC] Updated weight for {mapName} to {newWeight}.");
+                    //                    Console.WriteLine($"**************[GGMC] Updated weight for {mapName} to {newWeight}.");
                 }
             }
         }
