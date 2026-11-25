@@ -94,13 +94,25 @@ public class WasdManager : IWasdMenuManager
         };
         return menu;
     }
+    public IWasdMenu CreatePanoramaMenu(string title = "", bool freezePlayer = true,
+        bool displayOptionsCount = false, bool showMapPreviews = false)
+    {
+        return new PanoramaMenu
+        {
+            Title = title,
+            FreezePlayer = freezePlayer,
+            DisplayOptionsCount = displayOptionsCount,
+            ShowMapPreviews = showMapPreviews
+        };
+    }
+
     public BaseMenu MenuByType(string menuType, string title, BasePlugin plugin)
     {
-        return new WasdMenuMM(title, _plugin);
+        return new WasdMenuMM(title, _plugin, string.Equals(menuType, "panorama", StringComparison.OrdinalIgnoreCase));
     }
 
     public BaseMenu MenuByType(Type menuType, string title, BasePlugin plugin)
     {
-        return new WasdMenuMM(title, _plugin);
+        return new WasdMenuMM(title, _plugin, menuType == typeof(PanoramaMenu));
     }
 }

@@ -34,6 +34,7 @@ public class WasdMenuPlayer
     string strBack = "Back";
     string bottomMenuLine = "";
     string bottomSubMenuLine = "";
+    private bool panoramaVisible;
     private readonly int MoveType;
     public bool ActiveMenu
     {
@@ -62,6 +63,7 @@ public class WasdMenuPlayer
     }
     public void OpenMainMenu(WasdMenu? menu)
     {
+        HidePanorama();
         if (menu == null)
         {
             CurrentChoice = null;
@@ -74,7 +76,7 @@ public class WasdMenuPlayer
             return;
         }
         MainMenu = menu;
-        VisibleOptions = menu.Title != "" ? 4 : 5;
+        VisibleOptions = GetVisibleOptions(menu);
         CurrentChoice = MainMenu.Options?.First;
         MenuStart = CurrentChoice;
         
@@ -95,6 +97,8 @@ public class WasdMenuPlayer
     {
         if (menu == null)
         {
+            if (panoramaVisible || MainMenu is PanoramaMenu)
+                VisibleOptions = GetVisibleOptions(MainMenu);
             CurrentChoice = MainMenu?.Options?.First;
             MenuStart = CurrentChoice;
             if (_plugin.Config.MenuSettings.SoundInMenu && player != null)
@@ -105,7 +109,7 @@ public class WasdMenuPlayer
             return;
         }
 
-        VisibleOptions = menu.Title != "" ? 4 : 5;
+        VisibleOptions = GetVisibleOptions(menu);
         CurrentChoice = menu.Options?.First;
         MenuStart = CurrentChoice;
         if (_plugin.Config.MenuSettings.SoundInMenu && player != null)
@@ -118,18 +122,21 @@ public class WasdMenuPlayer
     {
         if (menu == null)
         {
+            if (panoramaVisible || MainMenu is PanoramaMenu)
+                VisibleOptions = GetVisibleOptions(MainMenu);
             CurrentChoice = MainMenu?.Options?.First;
             MenuStart = CurrentChoice;
             UpdateCenterHtml();
             return;
         }
 
-        VisibleOptions = menu.Value.Parent?.Title != "" ? 4 : 5;
+        VisibleOptions = GetVisibleOptions(menu.Value.Parent);
         CurrentChoice = menu;
-        if (CurrentChoice.Value.Index >= 5 )
+        int pageSize = menu.Value.Parent is PanoramaMenu ? VisibleOptions : 5;
+        if (CurrentChoice.Value.Index >= pageSize)
         {
             MenuStart = CurrentChoice;
-            for (int i = 0; i < 4; i++)
+            for (int i = 1; i < pageSize; i++)
             {
                 MenuStart = MenuStart?.Previous;
             }
@@ -252,10 +259,53 @@ public class WasdMenuPlayer
         UpdateCenterHtml();
     }
 
+    internal void RefreshOptions()
+    {
+        if (panoramaVisible && CurrentChoice?.Value.Parent is PanoramaMenu menu)
+        {
+            if (menu.DisplayOptionsCount)
+                _plugin.MapVoteHud.RefreshCounts(this);
+            return;
+        }
+
+        UpdateCenterHtml();
+    }
+
+    private static int GetVisibleOptions(IWasdMenu? menu) =>
+        menu is PanoramaMenu ? MapVoteHud.Rows : menu?.Title != "" ? 4 : 5;
+
+    private void HidePanorama()
+    {
+        if (panoramaVisible)
+        {
+            _plugin.MapVoteHud.Hide(this);
+            panoramaVisible = false;
+        }
+    }
+
     public void UpdateCenterHtml()
     {
         if (CurrentChoice == null || MainMenu == null)
+        {
+            HidePanorama();
             return;
+        }
+
+        if (CurrentChoice.Value.Parent is PanoramaMenu panorama)
+        {
+            var keys = _plugin.Config.MenuSettings;
+            string controls = panorama.Prev == null
+                ? $"[{keys.ScrollUp}/{keys.ScrollDown}] {strMove}   [{keys.Choose}] {strSelect}   [{keys.Exit}] {strExit}"
+                : $"[{keys.Choose}] {strSelect}   [{keys.Back}] {strBack}   [{keys.Exit}] {strExit}";
+            if (_plugin.MapVoteHud.Draw(this, _plugin, panorama, controls))
+            {
+                CenterHtml = "";
+                panoramaVisible = true;
+                return;
+            }
+        }
+
+        HidePanorama();
         StringBuilder builder = new StringBuilder();
         builder.AppendLine("<div>");
         int i = 0;

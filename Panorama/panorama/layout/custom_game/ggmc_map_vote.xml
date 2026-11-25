@@ -1,0 +1,51 @@
+<root>
+    <styles>
+        <include src="file://{resources}/styles/custom_game/ggmc_map_vote.css" />
+    </styles>
+    <Panel class="vote-root" hittest="false">
+        <Panel id="ggmc-vote" hittest="false">
+            <Panel class="vote-header">
+                <Label id="ggmc-title" text="{s:value}" />
+            </Panel>
+            <Panel class="vote-options">
+                <Panel id="ggmc-row-0" class="vote-row">
+                    <Label id="ggmc-row-0-number" class="vote-index" text="{s:value}" />
+                    <Panel id="ggmc-row-0-preview" class="vote-preview" />
+                    <Label id="ggmc-row-0-name" class="vote-name" text="{s:value}" />
+                    <Label id="ggmc-row-0-count" class="vote-count" text="{s:value}" />
+                </Panel>
+                <Panel id="ggmc-row-1" class="vote-row">
+                    <Label id="ggmc-row-1-number" class="vote-index" text="{s:value}" />
+                    <Panel id="ggmc-row-1-preview" class="vote-preview" />
+                    <Label id="ggmc-row-1-name" class="vote-name" text="{s:value}" />
+                    <Label id="ggmc-row-1-count" class="vote-count" text="{s:value}" />
+                </Panel>
+                <Panel id="ggmc-row-2" class="vote-row">
+                    <Label id="ggmc-row-2-number" class="vote-index" text="{s:value}" />
+                    <Panel id="ggmc-row-2-preview" class="vote-preview" />
+                    <Label id="ggmc-row-2-name" class="vote-name" text="{s:value}" />
+                    <Label id="ggmc-row-2-count" class="vote-count" text="{s:value}" />
+                </Panel>
+                <Panel id="ggmc-row-3" class="vote-row">
+                    <Label id="ggmc-row-3-number" class="vote-index" text="{s:value}" />
+                    <Panel id="ggmc-row-3-preview" class="vote-preview" />
+                    <Label id="ggmc-row-3-name" class="vote-name" text="{s:value}" />
+                    <Label id="ggmc-row-3-count" class="vote-count" text="{s:value}" />
+                </Panel>
+                <Panel id="ggmc-row-4" class="vote-row">
+                    <Label id="ggmc-row-4-number" class="vote-index" text="{s:value}" />
+                    <Panel id="ggmc-row-4-preview" class="vote-preview" />
+                    <Label id="ggmc-row-4-name" class="vote-name" text="{s:value}" />
+                    <Label id="ggmc-row-4-count" class="vote-count" text="{s:value}" />
+                </Panel>
+                <Panel id="ggmc-row-5" class="vote-row">
+                    <Label id="ggmc-row-5-number" class="vote-index" text="{s:value}" />
+                    <Panel id="ggmc-row-5-preview" class="vote-preview" />
+                    <Label id="ggmc-row-5-name" class="vote-name" text="{s:value}" />
+                    <Label id="ggmc-row-5-count" class="vote-count" text="{s:value}" />
+                </Panel>
+            </Panel>
+            <Label id="ggmc-controls" text="{s:value}" />
+        </Panel>
+    </Panel>
+</root>

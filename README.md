@@ -17,7 +17,7 @@
     <li><strong>Map Pools</strong> - Maps can be grouped into named pools. The active pool is used by RTV, map votes, admin votes, and automatic map changes.</li>
     <li><strong>Pool Voting</strong> - Players can vote to start a pool vote and then choose the active pool.</li>
     <li><strong>Low-Player Pool</strong> - A separate low-player map list can be used automatically when the server population is below the configured threshold.</li>
-    <li><strong>Menu Modes</strong> - Map votes, nominations, and pool votes can use <code>wasd</code>, <code>chat</code>, or <code>both</code> menu modes.</li>
+    <li><strong>Menu Modes</strong> - Map votes, nominations, and pool votes can use <code>wasd</code>, <code>chat</code>, or <code>panorama</code> menu modes.</li>
     <li><strong>Panorama Yes/No Vote</strong> - The admin "Vote to Change Map or Not" flow can use the native CS2 Panorama vote UI.</li>
     <li><strong>Player Count Thresholds</strong> - Maps can define minimum and maximum player counts.</li>
     <li><strong>Map Display Names</strong> - Maps can have friendly names shown in menus and messages.</li>
@@ -114,8 +114,8 @@
     <li><code>MapsInVote</code> - Number of maps shown in a vote.</li>
     <li><code>VotesToWin</code> - Vote ratio required to win or start threshold-based actions. Example: <code>0.6</code> means 60%.</li>
     <li><code>AllowNominate</code> - Allows players to nominate maps.</li>
-    <li><code>NominationsMenuMode</code> - Nomination menu mode: <code>wasd</code>, <code>chat</code>, or <code>both</code>. Empty values fall back to <code>wasd</code>.</li>
-    <li><code>EndMapVoteMenuMode</code> - End-of-map vote menu mode: <code>wasd</code>, <code>chat</code>, or <code>both</code>. Empty values fall back to <code>wasd</code>.</li>
+    <li><code>NominationsMenuMode</code> - Nomination menu mode: <code>wasd</code>, <code>chat</code>, or <code>panorama</code>. Empty values fall back to <code>wasd</code>.</li>
+    <li><code>EndMapVoteMenuMode</code> - End-of-map vote menu mode: <code>wasd</code>, <code>chat</code>, or <code>panorama</code>. Empty values fall back to <code>wasd</code>.</li>
     <li><code>YesNoVotePanorama</code> - Enables native Panorama yes/no voting for the admin "Vote to Change Map or Not" flow.</li>
     <li><code>PanoramaSFUIString</code> - SFUI string used by the Panorama yes/no vote.</li>
     <li><code>VotingTime</code> - Duration in seconds for map votes.</li>
@@ -145,7 +145,7 @@
     <li><code>VotingTime</code> - Time in seconds for players to choose a pool after the pool vote menu opens.</li>
     <li><code>BlockBeforeMapVoteSeconds</code> - In time-limit mode, blocks pool voting when the scheduled map vote is this many seconds away or closer.</li>
     <li><code>BlockBeforeMapVoteRounds</code> - In round-wins mode, blocks pool voting when the scheduled map vote is this many rounds away or closer.</li>
-    <li><code>MenuMode</code> - Pool vote menu mode: <code>wasd</code>, <code>chat</code>, or <code>both</code>. Empty values fall back to <code>wasd</code>.</li>
+    <li><code>MenuMode</code> - Pool vote menu mode: <code>wasd</code>, <code>chat</code>, or <code>panorama</code>. Empty values fall back to <code>wasd</code>.</li>
 </ul>
 
 <h4>WinDrawSettings</h4>
@@ -220,8 +220,25 @@
 <p>When active, normal map votes, RTV, and automatic random map changes use <code>LowPlayerMaps</code>. When the player count rises above the threshold, the plugin returns to the normal active pool.</p>
 
 <h3>Menu Modes</h3>
-<p><code>wasd</code> opens only the WASD HTML menu. <code>chat</code> or <code>chatmenu</code> opens only the CounterStrikeSharp chat menu. <code>both</code> opens both menu types at the same time; selecting in one closes the other. Empty or unknown values fall back to <code>wasd</code>.</p>
+<p>Each menu uses one mode. <code>wasd</code> opens the standard HTML menu, <code>chat</code> or <code>chatmenu</code> opens the CounterStrikeSharp chat menu, and <code>panorama</code> uses the custom addon. Empty, unknown, and legacy <code>both</code> values fall back to <code>wasd</code>.</p>
 <p>The admin "Vote to Change Map or Not" flow uses Panorama voting when <code>VoteSettings.YesNoVotePanorama</code> is true. In that case, <code>EndMapVoteMenuMode</code> does not apply to that yes/no vote.</p>
+
+<h3>Panorama configuration</h3>
+
+| Setting | Menu | Supported modes |
+| --- | --- | --- |
+| `VoteSettings.EndMapVoteMenuMode` | Next-map vote | `wasd`, `chat`, `panorama` |
+| `VoteSettings.NominationsMenuMode` | `!nominate` | `wasd`, `chat`, `panorama` |
+| `PoolVoteSettings.MenuMode` | Pool vote | `wasd`, `chat`, `panorama` |
+| `MenuSettings.AdminChangeMapMenuMode` | Administrative map selection | `wasd`, `panorama` |
+| `MenuSettings.AdminSetNextMapMenuMode` | Select the next map | `wasd`, `panorama` |
+| `MenuSettings.AdminManualMapVoteMenuMode` | Select maps for a manual vote | `wasd`, `panorama` |
+
+Panorama uses the existing titles, movement settings, and menu bindings. For next-map votes, `MenuSettings.DisplayVotesCount` controls the vote totals in both WASD and Panorama. Each menu keeps its existing count policy.
+
+Set `MenuSettings.ShowMapThumbnails` to `true` to show images in Panorama map lists. Place `GG1MapPreviews.json` next to `GG1MapChooser.json` to map keys from `GGMCmaps.json` to client texture resources. The addon supplies a shared placeholder for any map without a usable entry. With thumbnails disabled, the preview column collapses.
+
+When preparing addon resources, put overrides named after the map in `panorama/images/mapPreviews/manualy/`. The scripts check that directory first, then `mapPreviews/`, and use `mapPreviews/defatul.vtex` as the placeholder. Use `PREVIEWS` to point Make at an existing addon's `mapPreviews/` directory. [Preview scripts guide](scripts/README.md)
 
 <h3>Nomination Cooldown</h3>
 <p>When <code>VoteSettings.RememberNominatedMaps</code> is greater than <code>0</code>, nominated maps from completed votes are added to a recent nomination cooldown list. Maps in this list cannot be nominated again and are shown as disabled entries in nomination menus.</p>
@@ -237,7 +254,7 @@
 <pre><code>{
   "VoteSettings": {
     "RememberNominatedMaps": 3,
-    "NominationsMenuMode": "both",
+    "NominationsMenuMode": "wasd",
     "EndMapVoteMenuMode": "wasd",
     "YesNoVotePanorama": true,
     "PanoramaSFUIString": "#SFUI_Vote_None",
@@ -252,7 +269,7 @@
     "VotingTime": 20,
     "BlockBeforeMapVoteSeconds": 30,
     "BlockBeforeMapVoteRounds": 1,
-    "MenuMode": "both"
+    "MenuMode": "wasd"
   },
   "MenuSettings": {
     "DisplayVotesCount": true
@@ -341,7 +358,7 @@
     <li>Confirm that ties and votes for the current pool keep the existing active pool.</li>
     <li>Switch pools from <code>css_maps</code> and confirm that nominations and pending selected maps are cleared.</li>
     <li>Set <code>LowPlayerMaxPlayers</code> above the current online count and confirm RTV/map vote uses <code>LowPlayerMaps</code>.</li>
-    <li>Test <code>NominationsMenuMode</code>, <code>EndMapVoteMenuMode</code>, and <code>PoolVoteSettings.MenuMode</code> with <code>wasd</code>, <code>chat</code>, and <code>both</code>.</li>
+    <li>Test <code>NominationsMenuMode</code>, <code>EndMapVoteMenuMode</code>, and <code>PoolVoteSettings.MenuMode</code> with <code>wasd</code>, <code>chat</code>, and <code>panorama</code>.</li>
     <li>Set <code>RememberNominatedMaps</code> above <code>0</code>, nominate a map, complete a vote, and confirm the map cannot be nominated again until it leaves cooldown.</li>
     <li>Set <code>MaxExtendMapCount = 1</code>, enable <code>ExtendMapInVote</code>, extend once, and confirm the extend option is not available again on the same map.</li>
     <li>Set <code>RTVDelayFromStart = 0</code> and confirm RTV is available immediately after the match starts.</li>
@@ -360,7 +377,14 @@
 </ul>
 
 <h2>Plugin Compilation</h2>
-<p>To compile the plugin, download or reference the API project from <a href="https://github.com/ssypchenko/ggmcAPI">ggmcAPI</a>.</p>
+
+1. Install the .NET 10 SDK and place the [ggmcAPI](https://github.com/ssypchenko/ggmcAPI) checkout at `../ggmcAPI`. Run `make plugin` to build the plugin into `dist/GG1MapChooser/`.
+2. Prepare preview sources with one command. Use `make fetch_ftp` with the FTP settings from `.env.example`, `make fetch_workshop MAP_LIST=path/to/maps.json`, or `make fetch_local MAPS=path/to/game/csgo/maps`.
+3. Merge the generated `dist/map-previews/Panorama/panorama/` directory into the content root of your existing CS2 addon. Compile the addon with CS2 Workshop Tools on Windows and publish it to Workshop using your existing workflow.
+4. For a local check, mount that addon on the client and server, select `panorama` for the menu under test, and set `ShowMapThumbnails` as needed. Copy the generated `GG1MapPreviews.json` next to the plugin config. Run `ggmc_mapvote_start 45` in the server console. Verify counts with `DisplayVotesCount` enabled and disabled, check an unknown map with thumbnails enabled, and confirm that disabling thumbnails collapses the column. Check the same vote with `wasd` and `chat`.
+5. Install the plugin build and preview mapping on the target server manually. The scripts produce local artifacts and use FTP for reads.
+
+See the [preview scripts guide](scripts/README.md) for the output tree, the Workshop JSON input format, and manual installation paths.
 
 <h2>Plugin APIs</h2>
 <p>The plugin exposes these capabilities to other plugins.</p>
@@ -377,8 +401,8 @@
             <li><code>public void OpenSubMenu(CCSPlayerController? player, IWasdMenu? menu);</code> - opens a menu as a submenu.</li>
             <li><code>public void CloseActiveMenu(IWasdMenu? menu);</code> - closes an active menu object.</li>
             <li><code>public void CloseActiveMenu(CCSPlayerController? player);</code> - closes the player's active menu.</li>
-            <li><code>public BaseMenu MenuByType(string menuType, string title, BasePlugin plugin);</code> - creates an adapter menu by type name.</li>
-            <li><code>public BaseMenu MenuByType(Type menuType, string title, BasePlugin plugin);</code> - creates an adapter menu by type.</li>
+            <li><code>public BaseMenu MenuByType(string menuType, string title, BasePlugin plugin);</code> - creates an adapter menu by type name, including <code>panorama</code>.</li>
+            <li><code>public BaseMenu MenuByType(Type menuType, string title, BasePlugin plugin);</code> - creates an adapter menu by type, including <code>typeof(PanoramaMenu)</code>.</li>
         </ul>
     </li>
 </ul>
