@@ -1,0 +1,50 @@
+.vote-root { width: 100%; height: 100%; }
+#ggmc-vote {
+    visibility: collapse;
+    width: 570px;
+    horizontal-align: left;
+    vertical-align: center;
+    margin-left: 70px;
+    padding: 20px;
+    flow-children: down;
+    background-color: #101924f7;
+    border: 1px solid #425670;
+    border-radius: 12px;
+}
+#ggmc-vote.shown { visibility: visible; }
+.vote-header { visibility: collapse; width: 100%; margin-bottom: 15px; }
+#ggmc-vote.has-title .vote-header { visibility: visible; }
+#ggmc-title { width: 100%; color: #eef5ff; font-size: 32px; font-weight: bold; }
+.vote-count { visibility: collapse; }
+#ggmc-vote.show-counts .vote-count { visibility: visible; }
+.vote-options { width: 100%; flow-children: down; }
+.vote-row {
+    visibility: collapse;
+    width: 100%;
+    height: 67px;
+    margin-bottom: 6px;
+    padding: 8px 10px;
+    flow-children: right;
+    background-color: #202e40;
+    border-left: 3px solid #425670;
+    border-radius: 6px;
+}
+.vote-row.shown { visibility: visible; }
+.vote-row.selected { background-color: #314c66; border-left: 3px solid #f5a142; }
+.vote-index, .vote-name, .vote-count { vertical-align: center; color: #eef5ff; font-size: 20px; }
+.vote-index { width: 32px; color: #a7bfd7; }
+.vote-preview {
+    visibility: collapse;
+    width: 88px;
+    height: 50px;
+    vertical-align: center;
+    margin-right: 14px;
+    background-image: url("s2r://panorama/images/mapPreviews/defatul.vtex");
+    background-size: cover;
+    border-radius: 4px;
+}
+#ggmc-vote.show-previews .vote-row.has-preview .vote-preview { visibility: visible; }
+.vote-name { width: fill-parent-flow(1); text-overflow: ellipsis; }
+.vote-row.disabled .vote-name { color: #91a1b1; }
+.vote-count { width: 50px; text-align: right; color: #f5c984; font-weight: bold; }
+#ggmc-controls { margin-top: 10px; color: #a7bfd7; font-size: 17px; }

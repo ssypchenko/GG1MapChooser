@@ -40,11 +40,17 @@ namespace MapChooser
         public BasePlugin Plugin { get; } = null!;
         private MapChooser _plugin;
 
-        public WasdMenuMM(string title, MapChooser plugin)
+        public WasdMenuMM(string title, MapChooser plugin) : this(title, plugin, false)
+        {
+        }
+
+        internal WasdMenuMM(string title, MapChooser plugin, bool panorama)
         {
             _plugin = plugin;
             Title = title;
-            _innerWASDMenu = _plugin.wasdMenuManager.CreateMenu(title, freezePlayer: true, displayOptionsCount: false)
+            _innerWASDMenu = (panorama
+                ? _plugin.wASDMenu.manager.CreatePanoramaMenu(title)
+                : _plugin.wasdMenuManager.CreateMenu(title, freezePlayer: true, displayOptionsCount: false))
                    ?? throw new InvalidOperationException("IWasdMenuManager.CreateMenu returned null.");
         }
 

@@ -63,6 +63,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     public void OnConfigParsed(MCConfig config)
     {
         Config = config;
+        panoramaPreviews = null;
         if (Config.VoteSettings.MapsInVote < 1)
         {
             Config.VoteSettings.MapsInVote = 5;
@@ -93,6 +94,9 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     public bool mapChangedOnStart = false;
     private Random random = new();
     private string mapsFilePath = "";
+    private Dictionary<string, Uri>? panoramaPreviews;
+
+    internal MapVoteHud MapVoteHud { get; } = new();
     public Dictionary<string, MapInfo> Maps_from_List = new Dictionary<string, MapInfo>();
     private Dictionary<string, Dictionary<string, MapInfo>> MapPools = new Dictionary<string, Dictionary<string, MapInfo>>(StringComparer.OrdinalIgnoreCase);
     private string ActivePoolName = "";
@@ -257,6 +261,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     }
     public override void Unload(bool hotReload)
     {
+        MapVoteHud.Remove();
         RemoveListener<Listeners.OnClientDisconnectPost>(OnClientDisconnect);
         RemoveListener<Listeners.OnClientAuthorized>(OnClientAuthorized);
         RemoveListener<Listeners.OnClientPutInServer>(OnClientPutInServer);
@@ -499,6 +504,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     }
     private void OnMapEnd()
     {
+        MapVoteHud.Remove();
         Logger.LogInformation("OnMapEnd executed");
         // Both map vote timers use STOP_ON_MAPCHANGE, so only their managed references need clearing here.
         ResetMapVoteTimers(false);
@@ -892,6 +898,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     }
     private bool ReloadMapcycle()
     {
+        panoramaPreviews = null;
         try
         {
             string jsonString = File.ReadAllText(mapsFilePath);
@@ -986,6 +993,41 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         }
         return mapstotal > 0;
     }
+    internal Uri? GetPanoramaPreview(string mapKey)
+    {
+        if (panoramaPreviews == null)
+        {
+            panoramaPreviews = new Dictionary<string, Uri>(StringComparer.Ordinal);
+            var filePath = Path.Combine(Path.GetDirectoryName(WebhookNextMapMessagePath)!, "GG1MapPreviews.json");
+            try
+            {
+                using var file = File.OpenRead(filePath);
+                var sources = JsonSerializer.Deserialize<Dictionary<string, string?>>(file)
+                    ?? throw new JsonException("Expected an object mapping map keys to Panorama resource URIs.");
+                foreach (var (key, source) in sources)
+                {
+                    if (Uri.TryCreate(source, UriKind.Absolute, out var resource) &&
+                        resource.Scheme == "s2r" && resource.Host == "panorama" &&
+                        resource.AbsolutePath.EndsWith(".vtex", StringComparison.Ordinal) &&
+                        string.IsNullOrEmpty(resource.Query) && string.IsNullOrEmpty(resource.Fragment))
+                    {
+                        panoramaPreviews[key] = resource;
+                    }
+                    else
+                    {
+                        Logger.LogWarning("Ignoring invalid Panorama preview URI for map {MapKey} in {Path}.", key, filePath);
+                    }
+                }
+            }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException)
+            {
+                Logger.LogWarning(error, "Using the default Panorama preview. Could not read {Path}.", filePath);
+            }
+        }
+
+        return panoramaPreviews.GetValueOrDefault(mapKey);
+    }
+
     private bool SetActivePool(string poolName, bool announce, bool clearState)
     {
         if (!MapPools.TryGetValue(poolName, out var pool) || pool.Count == 0)
@@ -1094,8 +1136,11 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             case "chat":
             case "chatmenu":
                 return MenuMode.Chat;
+            case "panorama":
+                return MenuMode.Panorama;
             case "both":
-                return MenuMode.Both;
+                Logger.LogWarning("Menu mode 'both' is no longer supported. Falling back to 'wasd'.");
+                return MenuMode.Wasd;
             default:
                 Logger.LogWarning($"Unknown menu mode '{modeValue}'. Falling back to 'wasd'.");
                 return MenuMode.Wasd;
@@ -1502,9 +1547,11 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         return MapsMenu;
     }
 
-    private IWasdMenu CreateMapsMenuWASD(Action<CCSPlayerController, IWasdMenuOption> action, CCSPlayerController playerController, bool freezePlayers = true, bool limits = true, bool useActivePool = false)
+    private IWasdMenu CreateMapsMenuWASD(Action<CCSPlayerController, IWasdMenuOption> action, CCSPlayerController playerController, bool freezePlayers = true, bool limits = true, bool useActivePool = false, bool panorama = false)
     {
-        IWasdMenu MapsMenu = wASDMenu.manager.CreateMenu("", freezePlayers);
+        IWasdMenu MapsMenu = panorama
+            ? wASDMenu.manager.CreatePanoramaMenu("", freezePlayers, showMapPreviews: true)
+            : wASDMenu.manager.CreateMenu("", freezePlayers);
         var mapPool = useActivePool ? GetActiveMapPool() : Maps_from_List;
 
         List<string> selectedMapList = new();
@@ -1560,12 +1607,14 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             else
                 displayName = mapcheck.Key;
 
+            string? previewKey = panorama ? mapcheck.Key : null;
+
             // Show maps in cooldown as disabled entries.
             if (isInCooldown)
             {
                 using (new WithTemporaryCulture(playerController.GetLanguage()))
                 {
-                    MapsMenu.Add(displayName + _localizer["map.cooldown"], (p, o) => { }); // Disabled no-op entry.
+                    MapsMenu.Add(displayName + _localizer["map.cooldown"], (p, o) => { }, previewKey); // Disabled no-op entry.
                 }
                 menuSize++;
                 playersvalid = true;
@@ -1577,7 +1626,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             {
                 using (new WithTemporaryCulture(playerController.GetLanguage()))
                 {
-                    MapsMenu.Add(displayName + _localizer["map.nominated.suffix"], (p, o) => { }); // Disabled no-op entry.
+                    MapsMenu.Add(displayName + _localizer["map.nominated.suffix"], (p, o) => { }, previewKey); // Disabled no-op entry.
                 }
                 menuSize++;
                 playersvalid = true;
@@ -1594,11 +1643,11 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             // Normal selectable map.
             if (!playersvalid || isPlayed)
             {
-                MapsMenu.Add(displayName + " (!)", action);
+                MapsMenu.Add(displayName + " (!)", action, previewKey);
             }
             else
             {
-                MapsMenu.Add(displayName, action);
+                MapsMenu.Add(displayName, action, previewKey);
             }
             playersvalid = true;
             menuSize++;
@@ -1635,7 +1684,8 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         if (IsValidPlayer(player))
         {
             wASDMenu.manager.CloseMenu(player);
-            IWasdMenu acmm_menu = CreateMapsMenuWASD(Handle_AdminManualChange, player, Config.MenuSettings.FreezeAdminInMenu, false); // no restrictions, because admn choose maps
+            IWasdMenu acmm_menu = CreateMapsMenuWASD(Handle_AdminManualChange, player, Config.MenuSettings.FreezeAdminInMenu, false,
+                panorama: string.Equals(Config.MenuSettings.AdminChangeMapMenuMode?.Trim(), "panorama", StringComparison.OrdinalIgnoreCase)); // no restrictions, because admn choose maps
             if (acmm_menu != null)
                 wASDMenu.manager.OpenMainMenu(player, acmm_menu);
         }
@@ -1687,7 +1737,8 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         if (IsValidPlayer(player))
         {
             wASDMenu.manager.CloseMenu(player);
-            IWasdMenu avmm_menu = CreateMapsMenuWASD(Handle_VoteMapManual, player, Config.MenuSettings.FreezeAdminInMenu, false); // no restrictions, because admn choose maps
+            IWasdMenu avmm_menu = CreateMapsMenuWASD(Handle_VoteMapManual, player, Config.MenuSettings.FreezeAdminInMenu, false,
+                panorama: string.Equals(Config.MenuSettings.AdminManualMapVoteMenuMode?.Trim(), "panorama", StringComparison.OrdinalIgnoreCase)); // no restrictions, because admn choose maps
             if (avmm_menu != null)
                 wASDMenu.manager.OpenMainMenu(player, avmm_menu);
         }
@@ -1816,7 +1867,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
 
             var menuMode = GetVoteMenuMode();
             bool useWasd = menuMode != MenuMode.Chat;
-            bool useChat = menuMode != MenuMode.Wasd;
+            bool useChat = menuMode == MenuMode.Chat;
 
             if (useWasd)
             {
@@ -2045,7 +2096,8 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         if (IsValidPlayer(player))
         {
             wASDMenu.manager.CloseMenu(player);
-            IWasdMenu acmm_menu = CreateMapsMenuWASD(Handle_AdminSetNextMap, player, Config.MenuSettings.FreezeAdminInMenu, false); // no restrictions, because admn choose maps
+            IWasdMenu acmm_menu = CreateMapsMenuWASD(Handle_AdminSetNextMap, player, Config.MenuSettings.FreezeAdminInMenu, false,
+                panorama: string.Equals(Config.MenuSettings.AdminSetNextMapMenuMode?.Trim(), "panorama", StringComparison.OrdinalIgnoreCase)); // no restrictions, because admn choose maps
             if (acmm_menu != null)
                 wASDMenu.manager.OpenMainMenu(player, acmm_menu);
         }
@@ -2214,7 +2266,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         AnnounceVotePool();
         var mapPool = GetActiveMapPool();
         bool useWasd = menuMode != MenuMode.Chat;
-        bool useChat = menuMode != MenuMode.Wasd;
+        bool useChat = menuMode == MenuMode.Chat;
         if (useChat)
         {
             if (Config.VoteSettings.MapsInVote < 6)
@@ -2245,7 +2297,9 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
             {
                 ConfigMapsInVote = Config.VoteSettings.MapsInVote;
             }
-            GlobalWASDMenu = wASDMenu.manager.CreateMenu("", Config.MenuSettings.FreezePlayerInMenu, Config.MenuSettings.DisplayVotesCount);
+            GlobalWASDMenu = menuMode == MenuMode.Panorama
+                ? wASDMenu.manager.CreatePanoramaMenu("", Config.MenuSettings.FreezePlayerInMenu, Config.MenuSettings.DisplayVotesCount, showMapPreviews: true)
+                : wASDMenu.manager.CreateMenu("", Config.MenuSettings.FreezePlayerInMenu, Config.MenuSettings.DisplayVotesCount);
             if (GlobalWASDMenu == null)
             {
                 Logger.LogError($"GlobalWASDMenu is null but should not be, something is wrong");
@@ -3441,10 +3495,11 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
                 return;
             var menuMode = GetNominationMenuMode();
             bool useWasd = menuMode != MenuMode.Chat;
-            bool useChat = menuMode != MenuMode.Wasd;
+            bool useChat = menuMode == MenuMode.Chat;
             if (useWasd)
             {
-                IWasdMenu nominate_menu = CreateMapsMenuWASD(Handle_Nominations, player, Config.MenuSettings.FreezePlayerInMenu, true, true);
+                IWasdMenu nominate_menu = CreateMapsMenuWASD(Handle_Nominations, player, Config.MenuSettings.FreezePlayerInMenu, true, true,
+                    panorama: menuMode == MenuMode.Panorama);
                 if (nominate_menu != null)
                     wASDMenu.manager.OpenMainMenu(player, nominate_menu);
             }
@@ -4097,7 +4152,7 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         poolVotePlayers.Clear();
         var menuMode = GetPoolVoteMenuMode();
         bool useWasd = menuMode != MenuMode.Chat;
-        bool useChat = menuMode != MenuMode.Wasd;
+        bool useChat = menuMode == MenuMode.Chat;
 
         if (useChat)
         {
@@ -4111,7 +4166,9 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
         }
         if (useWasd)
         {
-            PoolWASDMenu = wASDMenu.manager.CreateMenu(_localizer["poolvote.title"], Config.MenuSettings.FreezePlayerInMenu, true);
+            PoolWASDMenu = menuMode == MenuMode.Panorama
+                ? wASDMenu.manager.CreatePanoramaMenu(_localizer["poolvote.title"], Config.MenuSettings.FreezePlayerInMenu, true)
+                : wASDMenu.manager.CreateMenu(_localizer["poolvote.title"], Config.MenuSettings.FreezePlayerInMenu, true);
             if (PoolWASDMenu == null)
             {
                 Logger.LogError("PoolWASDMenu is null but should not be.");
@@ -4486,7 +4543,8 @@ public class MapChooser : BasePlugin, IPluginConfig<MCConfig>
     {
         Wasd = 0,
         Chat = 1,
-        Both = 2
+        Both = 2,
+        Panorama = 3
     }
     public async Task SendWebhookMessage(string message)
     {
@@ -4675,7 +4733,7 @@ public class WASDMenu
     {
         foreach (var player in Players.Values)
         {
-            player.UpdateCenterHtml();
+            player.RefreshOptions();
         }
     }
     public void OnTick()
@@ -5000,6 +5058,19 @@ public class WASDMenuSettings
     /* Display Votes count in menu  */
     [JsonPropertyName("DisplayVotesCount")]
     public bool DisplayVotesCount { get; set; } = true;
+
+    [JsonPropertyName("ShowMapThumbnails")]
+    public bool ShowMapThumbnails { get; set; }
+
+    [JsonPropertyName("AdminChangeMapMenuMode")]
+    public string AdminChangeMapMenuMode { get; set; } = "wasd";
+
+    [JsonPropertyName("AdminSetNextMapMenuMode")]
+    public string AdminSetNextMapMenuMode { get; set; } = "wasd";
+
+    [JsonPropertyName("AdminManualMapVoteMenuMode")]
+    public string AdminManualMapVoteMenuMode { get; set; } = "wasd";
+
     /* Play sound effects in menu: open, scroll, select  */
     [JsonPropertyName("SoundInMenu")]
     public bool SoundInMenu { get; set; } = true;

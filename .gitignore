@@ -5,6 +5,8 @@
 
 ggmcAPI/
 shared/
+/.env
+/workshop-maps.json
 
 # Node artifact files
 node_modules/
